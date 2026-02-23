@@ -1,3 +1,34 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 @import "highlight.js/styles/github.css";
+
+/* ── Scrollbar styling ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #d1d5db; /* gray-300 */
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af; /* gray-400 */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #4b5563; /* gray-600 */
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280; /* gray-500 */
+}
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Prevent white flash on the root html element in dark mode */
+.dark {
+  color-scheme: dark;
+}

@@ -117,6 +117,16 @@ export function useDatabase() {
       return await window.electronAPI.updateThreadSamplingParams(threadId, params)
     },
 
+    getThreadCost: async (threadId) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.getThreadCost(threadId)
+    },
+
+    addToThreadCost: async (threadId, cost) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.addToThreadCost(threadId, cost)
+    },
+
     // Attachment operations
     addAttachment: async (messageId, type, content) => {
       if (!window.electronAPI) throw new Error('Electron API not available')

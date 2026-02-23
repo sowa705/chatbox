@@ -39,6 +39,7 @@ export function initDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       selected_model TEXT,
       total_tokens INTEGER DEFAULT 0,
+      total_cost REAL DEFAULT 0,
       sampling_params TEXT
     );
 
@@ -64,6 +65,9 @@ export function initDatabase() {
   `)
 
   console.log('Database initialized at:', dbPath)
+
+  // Migrations: add columns to existing databases that predate them
+  try { db.exec(`ALTER TABLE threads ADD COLUMN total_cost REAL DEFAULT 0`) } catch {}
 
   return db
 }
@@ -176,6 +180,17 @@ export const dbOperations = {
     stmt.run(totalTokens, threadId)
   },
 
+  getThreadCost: (threadId) => {
+    const stmt = db.prepare('SELECT total_cost FROM threads WHERE id = ?')
+    const row = stmt.get(threadId)
+    return row ? (row.total_cost || 0) : 0
+  },
+
+  addToThreadCost: (threadId, cost) => {
+    const stmt = db.prepare('UPDATE threads SET total_cost = COALESCE(total_cost, 0) + ? WHERE id = ?')
+    stmt.run(cost, threadId)
+  },
+
   updateThreadSamplingParams: (threadId, params) => {
     const stmt = db.prepare('UPDATE threads SET sampling_params = ? WHERE id = ?')
     stmt.run(JSON.stringify(params), threadId)
@@ -240,7 +255,12 @@ export async function listProviderModels(providerId) {
     const modalities = m.architecture?.input_modalities || null
     // OpenRouter provides supported_parameters: ["reasoning", "reasoning_effort", ...]
     const supportedParameters = m.supported_parameters || null
-    return { id: m.id, provider: provider.name, providerId: provider.id, contextWindow, modalities, supportedParameters }
+    // OpenRouter provides pricing: { prompt, completion } as cost-per-token strings
+    const pricing = m.pricing ? {
+      prompt: parseFloat(m.pricing.prompt) || 0,
+      completion: parseFloat(m.pricing.completion) || 0,
+    } : null
+    return { id: m.id, provider: provider.name, providerId: provider.id, contextWindow, modalities, supportedParameters, pricing }
   })
 
   // If any models are missing context window info and the base URL ends with /v1,

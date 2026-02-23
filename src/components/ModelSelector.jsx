@@ -175,7 +175,7 @@ function ModelSelector({ selectedModel, onModelChange }) {
                   <button
                     key={`${m.providerId}-${m.id}`}
                     onClick={() => {
-                      onModelChange({ providerId: m.providerId, modelId: m.id, provider: m.provider, contextWindow: m.contextWindow || null, modalities: m.modalities || null })
+                      onModelChange({ providerId: m.providerId, modelId: m.id, provider: m.provider, contextWindow: m.contextWindow || null, modalities: m.modalities || null, supportedParameters: m.supportedParameters || null, pricing: m.pricing || null })
                       setIsOpen(false)
                       setSearch('')
                     }}

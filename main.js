@@ -1,6 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import fs from 'fs'
+import os from 'os'
 import { initDatabase, closeDatabase, dbOperations, testProvider, listProviderModels, sendChatStream, generateThreadLabel } from './database.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -96,6 +98,14 @@ function setupIpcHandlers() {
     return dbOperations.updateThreadSamplingParams(threadId, params)
   })
 
+  ipcMain.handle('db:getThreadCost', async (event, threadId) => {
+    return dbOperations.getThreadCost(threadId)
+  })
+
+  ipcMain.handle('db:addToThreadCost', async (event, threadId, cost) => {
+    return dbOperations.addToThreadCost(threadId, cost)
+  })
+
   // Attachment operations
   ipcMain.handle('db:addAttachment', async (event, messageId, type, content) => {
     return dbOperations.addAttachment(messageId, type, content)
@@ -144,6 +154,84 @@ function setupIpcHandlers() {
   // Thread label generation
   ipcMain.handle('db:generateThreadLabel', async (event, userMessageText) => {
     return await generateThreadLabel(userMessageText)
+  })
+
+  // Attachment file operations
+  ipcMain.handle('attachment:saveToFile', async (event, dataUrl, defaultName) => {
+    const ext = defaultName ? path.extname(defaultName) : ''
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      defaultPath: defaultName || 'attachment',
+      filters: ext ? [{ name: 'File', extensions: [ext.slice(1)] }] : [{ name: 'All Files', extensions: ['*'] }]
+    })
+    if (canceled || !filePath) return { success: false }
+    // dataUrl can be a data URI or plain text
+    if (dataUrl.startsWith('data:')) {
+      const base64 = dataUrl.split(',')[1]
+      fs.writeFileSync(filePath, Buffer.from(base64, 'base64'))
+    } else {
+      fs.writeFileSync(filePath, dataUrl, 'utf8')
+    }
+    return { success: true, filePath }
+  })
+
+  ipcMain.handle('attachment:copyToClipboard', async (event, dataUrl, type) => {
+    try {
+      if (type === 'image') {
+        // Extract MIME type and raw buffer from the data URL
+        // nativeImage.createFromDataURL only reliably handles PNG; for all other
+        // formats (JPEG, WebP, GIF, …) we decode the base64 ourselves and pass
+        // the raw Buffer to clipboard.write so Electron picks the right format.
+        const mimeMatch = dataUrl.match(/^data:([^;]+);base64,/)
+        if (!mimeMatch) return { success: false, error: 'Invalid data URL' }
+        const mime = mimeMatch[1]                     // e.g. "image/png"
+        const base64 = dataUrl.split(',')[1]
+        const buf = Buffer.from(base64, 'base64')
+
+        if (mime === 'image/png') {
+          clipboard.write({ image: nativeImage.createFromBuffer(buf) })
+        } else if (mime === 'image/jpeg' || mime === 'image/jpg') {
+          // nativeImage.createFromBuffer with JPEGs works on Electron ≥ 28
+          clipboard.write({ image: nativeImage.createFromBuffer(buf) })
+        } else {
+          // For WebP, GIF, BMP, etc. – convert via nativeImage (it decodes most
+          // formats internally) then re-export as PNG for the clipboard
+          const img = nativeImage.createFromBuffer(buf)
+          if (img.isEmpty()) {
+            // Last-resort fallback: write the raw data URL as text
+            clipboard.writeText(dataUrl)
+            return { success: true, warning: 'Image format not supported natively; copied as data URL' }
+          }
+          clipboard.write({ image: img })
+        }
+        return { success: true }
+      } else if (type === 'video' || type === 'audio') {
+        // Electron has no clipboard type for binary media understood by other apps.
+        // Write the raw bytes to a temp file and put the file path as text so the
+        // user can at least paste the path into Finder / Explorer / a media player.
+        const mimeMatch = dataUrl.match(/^data:([^;]+);base64,/)
+        if (!mimeMatch) return { success: false, error: 'Invalid data URL' }
+        const mime = mimeMatch[1]
+        const ext = mime.split('/')[1] || type
+        const base64 = dataUrl.split(',')[1]
+        const buf = Buffer.from(base64, 'base64')
+        const tmpPath = path.join(os.tmpdir(), `clipboard_${Date.now()}.${ext}`)
+        fs.writeFileSync(tmpPath, buf)
+        clipboard.writeText(tmpPath)
+        return { success: true, tmpPath }
+      } else {
+        // Plain text / documents
+        if (dataUrl.startsWith('data:')) {
+          const base64 = dataUrl.split(',')[1]
+          clipboard.writeText(Buffer.from(base64, 'base64').toString('utf8'))
+        } else {
+          clipboard.writeText(dataUrl)
+        }
+        return { success: true }
+      }
+    } catch (err) {
+      console.error('clipboard copy error:', err)
+      return { success: false, error: err.message }
+    }
   })
 }
 

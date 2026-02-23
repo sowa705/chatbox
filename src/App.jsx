@@ -19,6 +19,7 @@ function App() {
   const [streamingContent, setStreamingContent] = useState('')
   const [streamingReasoning, setStreamingReasoning] = useState('')
   const [threadTokenCount, setThreadTokenCount] = useState(0)
+  const [threadCost, setThreadCost] = useState(0)
   const [threadSamplingParams, setThreadSamplingParams] = useState({})
   const messagesEndRef = useRef(null)
   // Refs to carry streaming context into the onStreamDone callback
@@ -59,7 +60,7 @@ function App() {
           // Find matching model from freshly loaded list
           const match = models.find(m => m.id === saved.modelId && m.providerId === saved.providerId)
           if (match) {
-            setSelectedModel({ modelId: match.id, providerId: match.providerId, provider: match.provider, contextWindow: match.contextWindow, modalities: match.modalities, supportedParameters: match.supportedParameters })
+            setSelectedModel({ modelId: match.id, providerId: match.providerId, provider: match.provider, contextWindow: match.contextWindow, modalities: match.modalities, supportedParameters: match.supportedParameters, pricing: match.pricing || null })
           } else {
             // Use saved data as-is even if not in current list
             setSelectedModel(saved)
@@ -78,12 +79,13 @@ function App() {
     if (db.isReady && selectedThreadId) {
       loadMessages(selectedThreadId)
       loadThreadTokenCount(selectedThreadId)
+      loadThreadCost(selectedThreadId)
       // Switch to the model that was used in this thread
       db.getThreadById(selectedThreadId).then(thread => {
         if (thread?.selected_model) {
           const match = allModels.find(m => m.id === thread.selected_model)
           if (match) {
-            setSelectedModel({ modelId: match.id, providerId: match.providerId, provider: match.provider, contextWindow: match.contextWindow, modalities: match.modalities, supportedParameters: match.supportedParameters })
+            setSelectedModel({ modelId: match.id, providerId: match.providerId, provider: match.provider, contextWindow: match.contextWindow, modalities: match.modalities, supportedParameters: match.supportedParameters, pricing: match.pricing || null })
           }
         }
         // Restore sampling params saved with this thread
@@ -100,6 +102,7 @@ function App() {
     } else {
       setMessages([])
       setThreadTokenCount(0)
+      setThreadCost(0)
       setThreadSamplingParams({})
     }
   }, [db.isReady, selectedThreadId])
@@ -134,6 +137,7 @@ function App() {
         const promptTokens = usage?.prompt_tokens || 0
         const completionTokens = usage?.completion_tokens || 0
         const totalTokens = promptTokens + completionTokens
+        const callCost = usage?.cost || 0
 
         try {
           // Back-fill per-message token count on the last user message:
@@ -152,12 +156,17 @@ function App() {
           if (totalTokens > 0) {
             await db.updateThreadTotalTokens(threadId, totalTokens)
           }
+
+          if (callCost > 0) {
+            await db.addToThreadCost(threadId, callCost)
+          }
         } catch (err) {
           console.error('Failed to save assistant message:', err)
         }
 
         loadMessages(threadId)
         loadThreadTokenCount(threadId)
+        loadThreadCost(threadId)
         loadThreads()
       }
     })
@@ -204,6 +213,15 @@ function App() {
       setThreadTokenCount(count)
     } catch (err) {
       console.error('Failed to load token count:', err)
+    }
+  }
+
+  const loadThreadCost = async (threadId) => {
+    try {
+      const cost = await db.getThreadCost(threadId)
+      setThreadCost(cost || 0)
+    } catch (err) {
+      console.error('Failed to load thread cost:', err)
     }
   }
 
@@ -679,6 +697,22 @@ function App() {
                   ? selectedModel.modalities.join(', ')
                   : 'text'}
               </p>
+              {selectedModel.pricing && (selectedModel.pricing.prompt > 0 || selectedModel.pricing.completion > 0) && (
+                <div className="pt-1 mt-1 border-t border-gray-200 dark:border-gray-600 space-y-0.5">
+                  <p className="flex justify-between">
+                    <span className="font-medium">Input price:</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-mono">
+                      ${(selectedModel.pricing.prompt * 1_000_000).toPrecision(3)}/M
+                    </span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span className="font-medium">Output price:</span>
+                    <span className="text-purple-600 dark:text-purple-400 font-mono">
+                      ${(selectedModel.pricing.completion * 1_000_000).toPrecision(3)}/M
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -905,6 +939,7 @@ function App() {
           <ContextGauge
             usedTokens={threadTokenCount}
             totalTokens={selectedModel?.contextWindow || 0}
+            totalCost={threadCost}
           />
         </div>
       </div>

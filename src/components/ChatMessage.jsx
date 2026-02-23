@@ -1,13 +1,105 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+
+function AttachmentContextMenu({ x, y, att, onClose }) {
+  const menuRef = useRef(null)
+  const [copyState, setCopyState] = useState('idle') // 'idle' | 'copying' | 'done' | 'error'
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onClose()
+    }
+    const handleKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [onClose])
+
+  const dataUrl = att.content || att.data || att.preview || ''
+  const isMedia = att.type === 'video' || att.type === 'audio'
+
+  const handleSave = async () => {
+    onClose()
+    try {
+      await window.electronAPI.saveAttachmentToFile(dataUrl, att.name || 'attachment')
+    } catch (err) {
+      console.error('Failed to save attachment:', err)
+    }
+  }
+
+  const handleCopy = async () => {
+    setCopyState('copying')
+    try {
+      const result = await window.electronAPI.copyAttachmentToClipboard(dataUrl, att.type)
+      if (result?.success) {
+        setCopyState('done')
+        setTimeout(() => onClose(), 900)
+      } else {
+        setCopyState('error')
+        setTimeout(() => setCopyState('idle'), 2000)
+      }
+    } catch (err) {
+      console.error('Failed to copy attachment:', err)
+      setCopyState('error')
+      setTimeout(() => setCopyState('idle'), 2000)
+    }
+  }
+
+  const copyLabel =
+    copyState === 'done'  ? 'Copied!' :
+    copyState === 'error' ? 'Failed' :
+    isMedia               ? 'Copy path to clipboard' :
+                            'Copy to clipboard'
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[170px]"
+      style={{ left: x, top: y }}
+    >
+      <button
+        onClick={handleSave}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      >
+        <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        Save as…
+      </button>
+      <button
+        onClick={handleCopy}
+        disabled={copyState === 'copying' || copyState === 'done'}
+        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors disabled:cursor-default
+          ${copyState === 'done'  ? 'text-green-600 dark:text-green-400' :
+            copyState === 'error' ? 'text-red-500 dark:text-red-400' :
+            'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+      >
+        {copyState === 'done' ? (
+          <svg className="w-4 h-4 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        )}
+        {copyLabel}
+      </button>
+    </div>
+  )
+}
 
 function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
   const [hovering, setHovering] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState('')
   const [reasoningOpen, setReasoningOpen] = useState(isStreaming)
+  const [attMenu, setAttMenu] = useState(null) // { x, y, att }
 
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
@@ -40,12 +132,25 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
     }
   }
 
+  const handleAttContextMenu = (e, att) => {
+    e.preventDefault()
+    setAttMenu({ x: e.clientX, y: e.clientY, att })
+  }
+
   return (
     <div
       className={`group flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
+      {attMenu && (
+        <AttachmentContextMenu
+          x={attMenu.x}
+          y={attMenu.y}
+          att={attMenu.att}
+          onClose={() => setAttMenu(null)}
+        />
+      )}
       {/* Model label for assistant messages */}
       {isAssistant && message.model && (
         <span className="text-xs text-gray-400 dark:text-gray-500 mb-1 ml-1 font-medium">
@@ -57,7 +162,7 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
       {message.attachments && message.attachments.length > 0 && (
         <div className={`flex flex-wrap gap-2 mb-1.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
           {message.attachments.map((att, i) => (
-            <div key={i}>
+            <div key={i} onContextMenu={(e) => handleAttContextMenu(e, att)}>
               {att.type === 'image' ? (
                 <img
                   src={att.content || att.data || att.preview}

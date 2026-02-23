@@ -24,10 +24,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getThreadTokenCount: (threadId) => ipcRenderer.invoke('db:getThreadTokenCount', threadId),
   updateThreadTotalTokens: (threadId, totalTokens) => ipcRenderer.invoke('db:updateThreadTotalTokens', threadId, totalTokens),
   updateThreadSamplingParams: (threadId, params) => ipcRenderer.invoke('db:updateThreadSamplingParams', threadId, params),
+  getThreadCost: (threadId) => ipcRenderer.invoke('db:getThreadCost', threadId),
+  addToThreadCost: (threadId, cost) => ipcRenderer.invoke('db:addToThreadCost', threadId, cost),
 
   // Attachment operations
   addAttachment: (messageId, type, content) => ipcRenderer.invoke('db:addAttachment', messageId, type, content),
   getAttachmentsByMessage: (messageId) => ipcRenderer.invoke('db:getAttachmentsByMessage', messageId),
+  saveAttachmentToFile: (dataUrl, defaultName) => ipcRenderer.invoke('attachment:saveToFile', dataUrl, defaultName),
+  copyAttachmentToClipboard: (dataUrl, type) => ipcRenderer.invoke('attachment:copyToClipboard', dataUrl, type),
   
   // Provider operations
   getAllProviders: () => ipcRenderer.invoke('db:getAllProviders'),

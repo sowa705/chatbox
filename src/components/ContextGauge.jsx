@@ -1,4 +1,4 @@
-function ContextGauge({ usedTokens, totalTokens }) {
+function ContextGauge({ usedTokens, totalTokens, totalCost }) {
   const percentage = totalTokens > 0 ? Math.min((usedTokens / totalTokens) * 100, 100) : 0
   const radius = 54
   const strokeWidth = 10
@@ -15,6 +15,16 @@ function ContextGauge({ usedTokens, totalTokens }) {
     if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
     return n.toString()
   }
+
+  const formatCost = (c) => {
+    if (!c || c === 0) return null
+    if (c < 0.000001) return '<$0.000001'
+    if (c < 0.01) return '$' + c.toFixed(6)
+    if (c < 1) return '$' + c.toFixed(4)
+    return '$' + c.toFixed(2)
+  }
+
+  const formattedCost = formatCost(totalCost)
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -63,6 +73,12 @@ function ContextGauge({ usedTokens, totalTokens }) {
           <span>Total</span>
           <span className="font-medium text-gray-700 dark:text-gray-300">{totalTokens > 0 ? formatTokens(totalTokens) : '—'}</span>
         </div>
+        {formattedCost && (
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 px-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+            <span>Cost</span>
+            <span className="font-medium text-green-600 dark:text-green-400">{formattedCost}</span>
+          </div>
+        )}
       </div>
     </div>
   )
