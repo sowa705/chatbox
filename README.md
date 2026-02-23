@@ -1,21 +1,29 @@
 # ChatBox
 
-Simple GUI for cloud and local LLM's
+Simple single-user Electron GUI for cloud and local LLM's
+
+![screenshot](screenshot.png)
 
 ## Features
 
 - Multiplatform
-    - MacOS
+    - macOS
     - Windows
     - Linux
 - OpenAI compatible providers support
     - OpenRouter
     - Ollama
+    - AI Studio (text-only)
     - many others...
 - Multimodality support
     - Image
     - Audio
     - Video
+- No Docker required
 
-## Screenshot
-![screenshot](screenshot.png)
+## Running locally
+
+```bash
+npm install
+npm run electron:dev
+```
