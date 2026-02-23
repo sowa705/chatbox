@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateProvider: (id, name, apiBase, apiKey) => ipcRenderer.invoke('db:updateProvider', id, name, apiBase, apiKey),
   deleteProvider: (id) => ipcRenderer.invoke('db:deleteProvider', id),
   testProvider: (id) => ipcRenderer.invoke('db:testProvider', id),
+  getDatabaseStats: () => ipcRenderer.invoke('db:getDatabaseStats'),
 
   // Model listing
   listProviderModels: (providerId) => ipcRenderer.invoke('db:listProviderModels', providerId),

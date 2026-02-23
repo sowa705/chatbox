@@ -1,9 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ProvidersSettings from './ProvidersSettings'
 import GeneralSettings from './GeneralSettings'
 
 function SettingsModal({ isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState('general')
+  const [dbStats, setDbStats] = useState(null)
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'about') {
+      window.electronAPI.getDatabaseStats().then(setDbStats).catch(() => setDbStats(null))
+    }
+  }, [isOpen, activeTab])
 
   if (!isOpen) return null
 
@@ -83,6 +90,34 @@ function SettingsModal({ isOpen, onClose }) {
                 <p className="text-gray-600 dark:text-gray-400">
                   A modern interface for interacting with Large Language Models.
                 </p>
+
+                <div className="mt-6">
+                  <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">Database Statistics</h5>
+                  {dbStats ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Database Size</p>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                          {(dbStats.sizeBytes / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Threads</p>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{dbStats.threadCount}</p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Messages</p>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{dbStats.messageCount}</p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Attachments</p>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{dbStats.attachmentCount}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Loading statistics…</p>
+                  )}
+                </div>
               </div>
             )}
           </div>

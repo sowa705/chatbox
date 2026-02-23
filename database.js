@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import fs from 'fs'
 import OpenAI from 'openai'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -232,6 +233,14 @@ export const dbOperations = {
   deleteProvider: (id) => {
     const stmt = db.prepare('DELETE FROM providers WHERE id = ?')
     stmt.run(id)
+  },
+
+  getDatabaseStats: () => {
+    const threadCount = db.prepare('SELECT COUNT(*) as count FROM threads').get().count
+    const messageCount = db.prepare('SELECT COUNT(*) as count FROM messages WHERE deleted = 0').get().count
+    const attachmentCount = db.prepare('SELECT COUNT(*) as count FROM attachments').get().count
+    const sizeBytes = fs.statSync(dbPath).size
+    return { threadCount, messageCount, attachmentCount, sizeBytes }
   }
 }
 

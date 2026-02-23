@@ -136,6 +136,10 @@ function setupIpcHandlers() {
     return dbOperations.deleteProvider(id)
   })
 
+  ipcMain.handle('db:getDatabaseStats', async () => {
+    return dbOperations.getDatabaseStats()
+  })
+
   ipcMain.handle('db:testProvider', async (event, id) => {
     return await testProvider(id)
   })
