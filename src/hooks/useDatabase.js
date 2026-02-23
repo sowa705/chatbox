@@ -112,6 +112,11 @@ export function useDatabase() {
       return await window.electronAPI.updateThreadTotalTokens(threadId, totalTokens)
     },
 
+    updateThreadSamplingParams: async (threadId, params) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.updateThreadSamplingParams(threadId, params)
+    },
+
     // Attachment operations
     addAttachment: async (messageId, type, content) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
@@ -161,9 +166,9 @@ export function useDatabase() {
     },
 
     // Streaming chat
-    sendChatStream: async (providerId, modelId, messages) => {
+    sendChatStream: async (providerId, modelId, messages, samplingParams) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
-      return await window.electronAPI.sendChatStream(providerId, modelId, messages)
+      return await window.electronAPI.sendChatStream(providerId, modelId, messages, samplingParams)
     },
 
     generateThreadLabel: async (userMessageText) => {

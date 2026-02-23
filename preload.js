@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteMessagesFrom: (threadId, fromTimestamp) => ipcRenderer.invoke('db:deleteMessagesFrom', threadId, fromTimestamp),
   getThreadTokenCount: (threadId) => ipcRenderer.invoke('db:getThreadTokenCount', threadId),
   updateThreadTotalTokens: (threadId, totalTokens) => ipcRenderer.invoke('db:updateThreadTotalTokens', threadId, totalTokens),
+  updateThreadSamplingParams: (threadId, params) => ipcRenderer.invoke('db:updateThreadSamplingParams', threadId, params),
 
   // Attachment operations
   addAttachment: (messageId, type, content) => ipcRenderer.invoke('db:addAttachment', messageId, type, content),
@@ -40,7 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listProviderModels: (providerId) => ipcRenderer.invoke('db:listProviderModels', providerId),
 
   // Streaming chat
-  sendChatStream: (providerId, modelId, messages) => ipcRenderer.invoke('db:sendChatStream', providerId, modelId, messages),
+  sendChatStream: (providerId, modelId, messages, samplingParams) => ipcRenderer.invoke('db:sendChatStream', providerId, modelId, messages, samplingParams),
   generateThreadLabel: (userMessageText) => ipcRenderer.invoke('db:generateThreadLabel', userMessageText),
   onStreamChunk: (callback) => {
     const listener = (event, chunk) => callback(chunk)

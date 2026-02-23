@@ -27,7 +27,7 @@ function ContextGauge({ usedTokens, totalTokens }) {
             cy="64"
             r={radius}
             fill="none"
-            stroke="#e5e7eb"
+            className="stroke-gray-200 dark:stroke-gray-700"
             strokeWidth={strokeWidth}
           />
           {/* Progress circle */}
@@ -46,22 +46,22 @@ function ContextGauge({ usedTokens, totalTokens }) {
         </svg>
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-bold text-gray-800">
+          <span className="text-xl font-bold text-gray-800 dark:text-gray-200">
             {percentage.toFixed(0)}%
           </span>
-          <span className="text-[10px] text-gray-400 font-medium">CONTEXT</span>
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">CONTEXT</span>
         </div>
       </div>
 
       {/* Token details */}
       <div className="text-center space-y-1 w-full">
-        <div className="flex justify-between text-xs text-gray-500 px-2">
+        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 px-2">
           <span>Used</span>
-          <span className="font-medium text-gray-700">{formatTokens(usedTokens)}</span>
+          <span className="font-medium text-gray-700 dark:text-gray-300">{formatTokens(usedTokens)}</span>
         </div>
-        <div className="flex justify-between text-xs text-gray-500 px-2">
+        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 px-2">
           <span>Total</span>
-          <span className="font-medium text-gray-700">{totalTokens > 0 ? formatTokens(totalTokens) : '—'}</span>
+          <span className="font-medium text-gray-700 dark:text-gray-300">{totalTokens > 0 ? formatTokens(totalTokens) : '—'}</span>
         </div>
       </div>
     </div>

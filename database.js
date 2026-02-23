@@ -38,7 +38,8 @@ export function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       selected_model TEXT,
-      total_tokens INTEGER DEFAULT 0
+      total_tokens INTEGER DEFAULT 0,
+      sampling_params TEXT
     );
 
     create table if not exists messages (
@@ -63,13 +64,6 @@ export function initDatabase() {
   `)
 
   console.log('Database initialized at:', dbPath)
-
-  // Migrations: add reasoning_content column if missing
-  const cols = db.pragma('table_info(messages)')
-  if (!cols.find(c => c.name === 'reasoning_content')) {
-    db.exec('ALTER TABLE messages ADD COLUMN reasoning_content TEXT')
-    console.log('Added reasoning_content column to messages table')
-  }
 
   return db
 }
@@ -182,6 +176,11 @@ export const dbOperations = {
     stmt.run(totalTokens, threadId)
   },
 
+  updateThreadSamplingParams: (threadId, params) => {
+    const stmt = db.prepare('UPDATE threads SET sampling_params = ? WHERE id = ?')
+    stmt.run(JSON.stringify(params), threadId)
+  },
+
   // Attachment operations
   addAttachment: (messageId, type, content) => {
     const stmt = db.prepare('INSERT INTO attachments (message_id, type, content) VALUES (?, ?, ?)')
@@ -239,7 +238,9 @@ export async function listProviderModels(providerId) {
     const contextWindow = m.context_length || m.context_window || null
     // OpenRouter provides architecture.input_modalities: ["text", "image", "file"]
     const modalities = m.architecture?.input_modalities || null
-    return { id: m.id, provider: provider.name, providerId: provider.id, contextWindow, modalities }
+    // OpenRouter provides supported_parameters: ["reasoning", "reasoning_effort", ...]
+    const supportedParameters = m.supported_parameters || null
+    return { id: m.id, provider: provider.name, providerId: provider.id, contextWindow, modalities, supportedParameters }
   })
 
   // If any models are missing context window info and the base URL ends with /v1,
@@ -293,7 +294,7 @@ export async function listProviderModels(providerId) {
   return models
 }
 
-export async function sendChatStream(providerIdNum, modelId, messages, win) {
+export async function sendChatStream(providerIdNum, modelId, messages, win, samplingParams = {}) {
   const provider = dbOperations.getProviderById(providerIdNum)
   if (!provider) {
     throw new Error('Provider not found')
@@ -304,20 +305,47 @@ export async function sendChatStream(providerIdNum, modelId, messages, win) {
     baseURL: provider.api_base
   })
 
+  // Build optional sampling parameters, omitting undefined/null values
+  const extraParams = {}
+  if (samplingParams.temperature != null) extraParams.temperature = samplingParams.temperature
+  if (samplingParams.max_tokens != null) extraParams.max_tokens = samplingParams.max_tokens
+  if (samplingParams.top_p != null) extraParams.top_p = samplingParams.top_p
+  if (samplingParams.top_k != null) extraParams.top_k = samplingParams.top_k
+
+  // Build reasoning config for OpenRouter (passed via extra_body)
+  // reasoning.mode: 'off' | 'effort' | 'tokens'
+  const reasoningMode = samplingParams.reasoning_mode
+  let extraBody = undefined
+  if (reasoningMode === 'effort' && samplingParams.reasoning_effort) {
+    const reasoningObj = { effort: samplingParams.reasoning_effort }
+    if (samplingParams.reasoning_exclude) reasoningObj.exclude = true
+    extraBody = { reasoning: reasoningObj }
+  } else if (reasoningMode === 'tokens' && samplingParams.reasoning_max_tokens != null) {
+    const reasoningObj = { max_tokens: samplingParams.reasoning_max_tokens }
+    if (samplingParams.reasoning_exclude) reasoningObj.exclude = true
+    extraBody = { reasoning: reasoningObj }
+  } else if (reasoningMode === 'off') {
+    extraBody = { reasoning: { effort: 'none' } }
+  }
+
   let stream
   try {
     stream = await openai.chat.completions.create({
       model: modelId,
       messages: messages,
       stream: true,
-      stream_options: { include_usage: true }
+      stream_options: { include_usage: true },
+      ...extraParams,
+      ...(extraBody ? extraBody : {})
     })
   } catch (e) {
     // Fallback: some providers may not support stream_options
     stream = await openai.chat.completions.create({
       model: modelId,
       messages: messages,
-      stream: true
+      stream: true,
+      ...extraParams,
+      ...(extraBody ? extraBody : {})
     })
   }
 

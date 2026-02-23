@@ -89,7 +89,7 @@ function ProvidersSettings() {
   if (!db.isReady) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
       </div>
     )
   }
@@ -108,13 +108,13 @@ function ProvidersSettings() {
 
       {/* Add/Edit Form */}
       {isAdding && (
-        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <h4 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+          <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
             {editingId ? 'Edit Provider' : 'Add New Provider'}
           </h4>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Provider Name
               </label>
               <input
@@ -122,12 +122,12 @@ function ProvidersSettings() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., OpenAI, Anthropic, Local LLM"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 API Base URL
               </label>
               <input
@@ -135,12 +135,12 @@ function ProvidersSettings() {
                 value={formData.apiBase}
                 onChange={(e) => setFormData({ ...formData, apiBase: e.target.value })}
                 placeholder="https://api.openai.com/v1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 API Key
               </label>
               <input
@@ -148,7 +148,7 @@ function ProvidersSettings() {
                 value={formData.apiKey}
                 onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                 placeholder="sk-..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
             <div className="flex gap-2">
@@ -161,7 +161,7 @@ function ProvidersSettings() {
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
               >
                 Cancel
               </button>
@@ -172,7 +172,7 @@ function ProvidersSettings() {
 
       {/* Test Result */}
       {testResult && (
-        <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+        <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700'}`}>
           <div className="flex items-start">
             <div className="flex-shrink-0">
               {testResult.success ? (
@@ -205,20 +205,20 @@ function ProvidersSettings() {
 
       {/* Providers List */}
       <div className="space-y-3">
-        <h4 className="text-lg font-medium text-gray-900">Configured Providers</h4>
+        <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">Configured Providers</h4>
         {providers.length === 0 ? (
-          <p className="text-gray-500">No providers configured yet.</p>
+          <p className="text-gray-500 dark:text-gray-400">No providers configured yet.</p>
         ) : (
           providers.map((provider) => (
             <div
               key={provider.id}
-              className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h5 className="font-medium text-gray-900">{provider.name}</h5>
-                  <p className="text-sm text-gray-600 mt-1">{provider.api_base}</p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <h5 className="font-medium text-gray-900 dark:text-gray-100">{provider.name}</h5>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{provider.api_base}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
                     API Key: {provider.api_key.substring(0, 10)}...
                   </p>
                 </div>
@@ -226,19 +226,19 @@ function ProvidersSettings() {
                   <button
                     onClick={() => handleTest(provider)}
                     disabled={testingId === provider.id}
-                    className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    className="px-3 py-1 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                   >
                     {testingId === provider.id ? 'Testing...' : 'Test'}
                   </button>
                   <button
                     onClick={() => handleEdit(provider)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors text-sm"
+                    className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors text-sm"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(provider.id)}
-                    className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors text-sm"
+                    className="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors text-sm"
                   >
                     Delete
                   </button>

@@ -48,7 +48,7 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
     >
       {/* Model label for assistant messages */}
       {isAssistant && message.model && (
-        <span className="text-xs text-gray-400 mb-1 ml-1 font-medium">
+        <span className="text-xs text-gray-400 dark:text-gray-500 mb-1 ml-1 font-medium">
           {message.model}
         </span>
       )}
@@ -62,15 +62,15 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
                 <img
                   src={att.content || att.data || att.preview}
                   alt={att.name || 'Attached image'}
-                  className="max-h-48 max-w-xs rounded-lg border border-gray-200 shadow-sm object-contain bg-white"
+                  className="max-h-48 max-w-xs rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm object-contain bg-white dark:bg-gray-800"
                 />
               ) : att.type === 'audio' ? (
-                <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 border border-gray-200">
+                <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2 border border-gray-200 dark:border-gray-700">
                   <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
                   </svg>
                   <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-600 truncate max-w-[300px]">{att.name || 'Audio'}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[300px]">{att.name || 'Audio'}</span>
                     <audio controls className="h-8 w-[300px]" src={att.content || att.data} />
                   </div>
                 </div>
@@ -78,10 +78,10 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
                 <video
                   src={att.content || att.data || att.preview}
                   controls
-                  className="max-h-64 max-w-sm rounded-lg border border-gray-200 shadow-sm bg-black"
+                  className="max-h-64 max-w-sm rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm bg-black"
                 />
               ) : (
-                <div className="flex items-center gap-2 text-xs bg-gray-100 text-gray-600 rounded-lg px-3 py-2 border border-gray-200">
+                <div className="flex items-center gap-2 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg px-3 py-2 border border-gray-200 dark:border-gray-700">
                   <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
@@ -98,7 +98,7 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
         <div className="max-w-2xl w-full mb-1.5">
           <button
             onClick={() => setReasoningOpen(!reasoningOpen)}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors px-2 py-1 rounded-md hover:bg-gray-100"
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors px-2 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             <svg
               className={`w-3.5 h-3.5 transition-transform duration-200 ${reasoningOpen ? 'rotate-90' : ''}`}
@@ -117,7 +117,7 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
             )}
           </button>
           {reasoningOpen && (
-            <div className="mt-1 ml-1 border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 text-xs text-gray-700 leading-relaxed max-h-64 overflow-y-auto">
+            <div className="mt-1 ml-1 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 rounded-lg px-3 py-2 text-xs text-gray-700 dark:text-gray-300 leading-relaxed max-h-64 overflow-y-auto">
                 <ReactMarkdown>
                     {message.reasoning_content}
                 </ReactMarkdown>
@@ -131,7 +131,7 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
         className={`rounded-xl px-4 py-3 max-w-2xl shadow-sm ${
           isUser
             ? 'bg-blue-600 text-white'
-            : 'bg-white text-gray-900 border border-gray-200'
+            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700'
         }`}
       >
         {editing ? (
@@ -185,27 +185,27 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
                   li: ({ children }) => <li className="ml-2">{children}</li>,
                   code: ({ inline, className, children }) =>
                     inline ? (
-                      <code className="bg-gray-100 text-pink-600 rounded px-1 py-0.5 text-[0.85em] font-mono">{children}</code>
+                      <code className="bg-gray-100 dark:bg-gray-700 text-pink-600 dark:text-pink-400 rounded px-1 py-0.5 text-[0.85em] font-mono">{children}</code>
                     ) : (
                       <code className={className}>{children}</code>
                     ),
                   pre: ({ children }) => (
-                    <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2 overflow-x-auto text-[0.85em]">{children}</pre>
+                    <pre className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 mb-2 overflow-x-auto text-[0.85em]">{children}</pre>
                   ),
                   blockquote: ({ children }) => (
-                    <blockquote className="border-l-4 border-gray-300 pl-3 italic text-gray-600 mb-2">{children}</blockquote>
+                    <blockquote className="border-l-4 border-gray-300 dark:border-gray-600 pl-3 italic text-gray-600 dark:text-gray-400 mb-2">{children}</blockquote>
                   ),
                   a: ({ href, children }) => (
-                    <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline hover:text-blue-800">{children}</a>
+                    <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300">{children}</a>
                   ),
                   table: ({ children }) => (
                     <div className="overflow-x-auto mb-2">
-                      <table className="min-w-full border border-gray-200 rounded text-sm">{children}</table>
+                      <table className="min-w-full border border-gray-200 dark:border-gray-700 rounded text-sm">{children}</table>
                     </div>
                   ),
-                  th: ({ children }) => <th className="border border-gray-200 bg-gray-50 px-3 py-1.5 font-semibold text-left">{children}</th>,
-                  td: ({ children }) => <td className="border border-gray-200 px-3 py-1.5">{children}</td>,
-                  hr: () => <hr className="my-3 border-gray-200" />,
+                  th: ({ children }) => <th className="border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 font-semibold text-left">{children}</th>,
+                  td: ({ children }) => <td className="border border-gray-200 dark:border-gray-700 px-3 py-1.5">{children}</td>,
+                  hr: () => <hr className="my-3 border-gray-200 dark:border-gray-700" />,
                   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
                 }}
               >
@@ -229,7 +229,7 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
           {/* Edit button - both sides */}
           <button
             onClick={handleStartEdit}
-            className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             title="Edit message"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -241,7 +241,7 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
           {isAssistant && (
             <button
               onClick={() => onRetry(message)}
-              className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title="Retry from here"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

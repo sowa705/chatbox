@@ -111,7 +111,7 @@ function ModelSelector({ selectedModel, onModelChange }) {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-left bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm truncate"
+        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-left bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm truncate text-gray-900 dark:text-gray-100"
         title={selectedDisplay}
       >
         <span className="flex items-center justify-between gap-1 pr-5">
@@ -129,21 +129,21 @@ function ModelSelector({ selectedModel, onModelChange }) {
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 flex flex-col">
+        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-80 flex flex-col">
           {/* Search */}
-          <div className="p-2 border-b border-gray-100">
+          <div className="p-2 border-b border-gray-100 dark:border-gray-700">
             <input
               ref={searchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search models..."
-              className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
             />
           </div>
 
           {/* Refresh button */}
-          <div className="px-2 py-1 border-b border-gray-100">
+          <div className="px-2 py-1 border-b border-gray-100 dark:border-gray-700">
             <button
               onClick={(e) => {
                 e.stopPropagation()
@@ -162,13 +162,13 @@ function ModelSelector({ selectedModel, onModelChange }) {
           {/* Model list */}
           <div className="overflow-y-auto flex-1">
             {Object.keys(grouped).length === 0 && (
-              <div className="p-3 text-sm text-gray-500 text-center">
+              <div className="p-3 text-sm text-gray-500 dark:text-gray-400 text-center">
                 {loading ? 'Loading models...' : 'No models found. Add a provider in Settings.'}
               </div>
             )}
             {Object.entries(grouped).map(([provider, providerModels]) => (
               <div key={provider}>
-                <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase bg-gray-50 sticky top-0">
+                <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-900 sticky top-0">
                   {provider}
                 </div>
                 {providerModels.map((m) => (
@@ -179,10 +179,10 @@ function ModelSelector({ selectedModel, onModelChange }) {
                       setIsOpen(false)
                       setSearch('')
                     }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between gap-2 ${
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors flex items-center justify-between gap-2 ${
                       selectedModel?.modelId === m.id && selectedModel?.providerId === m.providerId
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'text-gray-700'
+                        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
+                        : 'text-gray-700 dark:text-gray-200'
                     }`}
                   >
                     <span className="truncate flex-1">{m.id}</span>

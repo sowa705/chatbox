@@ -92,6 +92,10 @@ function setupIpcHandlers() {
     return dbOperations.updateThreadTotalTokens(threadId, totalTokens)
   })
 
+  ipcMain.handle('db:updateThreadSamplingParams', async (event, threadId, params) => {
+    return dbOperations.updateThreadSamplingParams(threadId, params)
+  })
+
   // Attachment operations
   ipcMain.handle('db:addAttachment', async (event, messageId, type, content) => {
     return dbOperations.addAttachment(messageId, type, content)
@@ -132,9 +136,9 @@ function setupIpcHandlers() {
   })
 
   // Streaming chat
-  ipcMain.handle('db:sendChatStream', async (event, providerId, modelId, messages) => {
+  ipcMain.handle('db:sendChatStream', async (event, providerId, modelId, messages, samplingParams) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    return await sendChatStream(providerId, modelId, messages, win)
+    return await sendChatStream(providerId, modelId, messages, win, samplingParams || {})
   })
 
   // Thread label generation

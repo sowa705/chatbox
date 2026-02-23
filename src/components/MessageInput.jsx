@@ -250,8 +250,8 @@ function MessageInput({ onSend, disabled }) {
 
   return (
     <div
-      className={`bg-white border-t border-gray-200 p-4 ${
-        isDragOver ? 'ring-2 ring-blue-400 ring-inset bg-blue-50' : ''
+      className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 ${
+        isDragOver ? 'ring-2 ring-blue-400 ring-inset bg-blue-50 dark:bg-blue-900/30' : ''
       }`}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -263,7 +263,7 @@ function MessageInput({ onSend, disabled }) {
           {attachments.map((att, i) => (
             <div
               key={i}
-              className="relative group flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 text-sm"
+              className="relative group flex items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-2 text-sm"
             >
               {att.type === 'image' && att.preview ? (
                 <img src={att.preview} alt={att.name} className="h-10 w-10 object-cover rounded" />
@@ -280,7 +280,7 @@ function MessageInput({ onSend, disabled }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               )}
-              <span className="text-gray-700 max-w-[120px] truncate">{att.name}</span>
+              <span className="text-gray-700 dark:text-gray-300 max-w-[120px] truncate">{att.name}</span>
               <button
                 onClick={() => removeAttachment(i)}
                 className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
@@ -299,7 +299,7 @@ function MessageInput({ onSend, disabled }) {
         {/* Attach button */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-2 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+          className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
           title="Attach file"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,7 +314,7 @@ function MessageInput({ onSend, disabled }) {
           className={`p-2 transition-colors flex-shrink-0 ${
             isRecording
               ? 'text-red-500 hover:text-red-700 animate-pulse'
-              : 'text-gray-400 hover:text-gray-600'
+              : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
           }`}
           title={isRecording ? `Stop recording (${formatDuration(recordingDuration)})` : 'Record audio'}
         >
@@ -353,7 +353,7 @@ function MessageInput({ onSend, disabled }) {
           placeholder={isDragOver ? 'Drop files here...' : 'Type your message... (Shift+Enter for new line)'}
           disabled={disabled}
           rows={1}
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm min-h-[40px] max-h-[200px] overflow-y-auto disabled:bg-gray-100 disabled:text-gray-400"
+          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm min-h-[40px] max-h-[200px] overflow-y-auto disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
           style={{ height: 'auto' }}
           onInput={(e) => {
             e.target.style.height = 'auto'
@@ -373,8 +373,8 @@ function MessageInput({ onSend, disabled }) {
       </div>
 
       {isDragOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-blue-50 bg-opacity-90 rounded pointer-events-none">
-          <p className="text-blue-600 font-medium">Drop files to attach</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-blue-50 dark:bg-blue-900/80 bg-opacity-90 rounded pointer-events-none">
+          <p className="text-blue-600 dark:text-blue-300 font-medium">Drop files to attach</p>
         </div>
       )}
     </div>
