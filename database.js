@@ -14,7 +14,7 @@ const dbPath = path.join(app.getPath('userData'), 'database.db')
 let db = null
 
 export function initDatabase() {
-  db = new Database(dbPath, { verbose: console.log })
+  db = new Database(dbPath, { verbose: process.env.NODE_ENV === 'development' ? console.log : undefined })
   
   // Enable WAL mode for better concurrent access
   db.pragma('journal_mode = WAL')
@@ -69,6 +69,7 @@ export function initDatabase() {
 
   // Migrations: add columns to existing databases that predate them
   try { db.exec(`ALTER TABLE threads ADD COLUMN total_cost REAL DEFAULT 0`) } catch {}
+  try { db.exec(`ALTER TABLE attachments ADD COLUMN name TEXT`) } catch {}
 
   return db
 }
@@ -129,9 +130,12 @@ export const dbOperations = {
   },
 
   deleteThread: (threadId) => {
-    db.prepare('DELETE FROM attachments WHERE message_id IN (SELECT timestamp FROM messages WHERE thread_id = ?)').run(threadId)
-    db.prepare('DELETE FROM messages WHERE thread_id = ?').run(threadId)
-    db.prepare('DELETE FROM threads WHERE id = ?').run(threadId)
+    const deleteThread = db.transaction((id) => {
+      db.prepare('DELETE FROM attachments WHERE message_id IN (SELECT timestamp FROM messages WHERE thread_id = ?)').run(id)
+      db.prepare('DELETE FROM messages WHERE thread_id = ?').run(id)
+      db.prepare('DELETE FROM threads WHERE id = ?').run(id)
+    })
+    deleteThread(threadId)
   },
 
   // Message operations
@@ -198,9 +202,9 @@ export const dbOperations = {
   },
 
   // Attachment operations
-  addAttachment: (messageId, type, content) => {
-    const stmt = db.prepare('INSERT INTO attachments (message_id, type, content) VALUES (?, ?, ?)')
-    stmt.run(messageId, type, content)
+  addAttachment: (messageId, type, content, name = null) => {
+    const stmt = db.prepare('INSERT INTO attachments (message_id, type, content, name) VALUES (?, ?, ?, ?)')
+    stmt.run(messageId, type, content, name)
   },
 
   getAttachmentsByMessage: (messageId) => {

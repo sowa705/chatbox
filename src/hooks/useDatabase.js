@@ -128,9 +128,9 @@ export function useDatabase() {
     },
 
     // Attachment operations
-    addAttachment: async (messageId, type, content) => {
+    addAttachment: async (messageId, type, content, name) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
-      return await window.electronAPI.addAttachment(messageId, type, content)
+      return await window.electronAPI.addAttachment(messageId, type, content, name)
     },
 
     getAttachmentsByMessage: async (messageId) => {

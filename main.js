@@ -15,6 +15,7 @@ const createWindow = () => {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: false,
       preload: path.join(__dirname, 'preload.js')
     }
   })
@@ -107,8 +108,8 @@ function setupIpcHandlers() {
   })
 
   // Attachment operations
-  ipcMain.handle('db:addAttachment', async (event, messageId, type, content) => {
-    return dbOperations.addAttachment(messageId, type, content)
+  ipcMain.handle('db:addAttachment', async (event, messageId, type, content, name) => {
+    return dbOperations.addAttachment(messageId, type, content, name)
   })
 
   ipcMain.handle('db:getAttachmentsByMessage', async (event, messageId) => {

@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addToThreadCost: (threadId, cost) => ipcRenderer.invoke('db:addToThreadCost', threadId, cost),
 
   // Attachment operations
-  addAttachment: (messageId, type, content) => ipcRenderer.invoke('db:addAttachment', messageId, type, content),
+  addAttachment: (messageId, type, content, name) => ipcRenderer.invoke('db:addAttachment', messageId, type, content, name),
   getAttachmentsByMessage: (messageId) => ipcRenderer.invoke('db:getAttachmentsByMessage', messageId),
   saveAttachmentToFile: (dataUrl, defaultName) => ipcRenderer.invoke('attachment:saveToFile', dataUrl, defaultName),
   copyAttachmentToClipboard: (dataUrl, type) => ipcRenderer.invoke('attachment:copyToClipboard', dataUrl, type),

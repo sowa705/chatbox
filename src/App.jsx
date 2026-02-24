@@ -429,7 +429,7 @@ function App() {
 
       // Save attachments
       for (const att of attachments) {
-        await db.addAttachment(msgTs, att.type, att.data)
+        await db.addAttachment(msgTs, att.type, att.data, att.name || null)
       }
 
       // Reload to include the new user message
@@ -490,7 +490,7 @@ function App() {
 
       // Re-attach the original attachments to the new message timestamp
       for (const att of originalAttachments) {
-        await db.addAttachment(newTs, att.type, att.content || att.data)
+        await db.addAttachment(newTs, att.type, att.content || att.data, att.name || null)
       }
 
       await loadMessages(selectedThreadId)

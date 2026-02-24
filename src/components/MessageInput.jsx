@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { processPdf } from '../utils/pdfProcessor'
 
 function MessageInput({ onSend, disabled }) {
   const [text, setText] = useState('')
@@ -6,6 +7,7 @@ function MessageInput({ onSend, disabled }) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingDuration, setRecordingDuration] = useState(0)
+  const [processingFiles, setProcessingFiles] = useState(0) // track async file processing
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -30,10 +32,20 @@ function MessageInput({ onSend, disabled }) {
     })
   }
 
+  const readFileAsArrayBuffer = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = reject
+      reader.readAsArrayBuffer(file)
+    })
+  }
+
   const processFile = async (file) => {
     const isImage = file.type.startsWith('image/')
     const isAudio = file.type.startsWith('audio/')
     const isVideo = file.type.startsWith('video/')
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
     const isText = file.type.startsWith('text/') || 
       ['.md', '.json', '.csv', '.xml', '.yaml', '.yml', '.log', '.js', '.ts', '.py', '.html', '.css']
         .some(ext => file.name.toLowerCase().endsWith(ext))
@@ -61,6 +73,28 @@ function MessageInput({ onSend, disabled }) {
         name: file.name,
         data: base64,
         preview: base64
+      }
+    } else if (isPdf) {
+      const arrayBuffer = await readFileAsArrayBuffer(file)
+      const result = await processPdf(arrayBuffer, file.name)
+
+      if (result.type === 'text') {
+        // Text-based PDF: attach as a document with extracted text
+        return {
+          type: 'document',
+          name: file.name,
+          data: result.text,
+          preview: null,
+          pdfPageCount: result.pageCount
+        }
+      } else {
+        // Scanned/image PDF: return an array of image attachments
+        return result.images.map((img) => ({
+          type: 'image',
+          name: `${file.name} (page ${img.page}/${result.pageCount})`,
+          data: img.data,
+          preview: img.data
+        }))
       }
     } else if (isText || file.size < 100000) {
       // Try reading as text for text-like files
@@ -177,15 +211,22 @@ function MessageInput({ onSend, disabled }) {
   }
 
   const handleFiles = async (files) => {
+    setProcessingFiles(prev => prev + files.length)
     const processed = []
     for (const file of files) {
       try {
-        const att = await processFile(file)
-        processed.push(att)
+        const result = await processFile(file)
+        // processFile may return an array (e.g. scanned PDF pages) or a single object
+        if (Array.isArray(result)) {
+          processed.push(...result)
+        } else {
+          processed.push(result)
+        }
       } catch (err) {
         console.error('Failed to process file:', file.name, err)
       }
     }
+    setProcessingFiles(prev => prev - files.length)
     setAttachments(prev => [...prev, ...processed])
   }
 
@@ -235,7 +276,7 @@ function MessageInput({ onSend, disabled }) {
   }
 
   const handleSend = () => {
-    if ((!text.trim() && attachments.length === 0) || disabled) return
+    if ((!text.trim() && attachments.length === 0) || disabled || processingFiles > 0) return
     onSend(text.trim(), attachments)
     setText('')
     setAttachments([])
@@ -258,7 +299,7 @@ function MessageInput({ onSend, disabled }) {
       onDragLeave={handleDragLeave}
     >
       {/* Attachment previews */}
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || processingFiles > 0) && (
         <div className="flex flex-wrap gap-2 mb-3">
           {attachments.map((att, i) => (
             <div
@@ -291,6 +332,15 @@ function MessageInput({ onSend, disabled }) {
               </button>
             </div>
           ))}
+          {processingFiles > 0 && (
+            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg px-3 py-2 text-sm text-blue-600 dark:text-blue-400">
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-xs">Processing PDF...</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -363,7 +413,7 @@ function MessageInput({ onSend, disabled }) {
 
         <button
           onClick={handleSend}
-          disabled={disabled || (!text.trim() && attachments.length === 0)}
+          disabled={disabled || processingFiles > 0 || (!text.trim() && attachments.length === 0)}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
