@@ -124,7 +124,44 @@ function App() {
       setStreamingReasoning(prev => prev + chunk)
     })
 
-    const unsubDone = db.onStreamDone(async (fullContent, usage, reasoning) => {
+    const saveAssistantMessage = async (threadId, modelId, msgs, prevTotalTokens, fullContent, usage, reasoning, durationMs) => {
+      const promptTokens = usage?.prompt_tokens || 0
+      const completionTokens = usage?.completion_tokens || 0
+      const totalTokens = promptTokens + completionTokens
+      const callCost = usage?.cost || 0
+
+      try {
+        // Back-fill per-message token count on the last user message:
+        // prompt_tokens covers the entire context sent, so subtracting the previous
+        // thread total gives the tokens contributed by the new user turn.
+        if (promptTokens > 0) {
+          const userMsgTokens = promptTokens - prevTotalTokens
+          const lastUserMsg = msgs ? [...msgs].reverse().find(m => m.role === 'user') : null
+          if (lastUserMsg?.timestamp && userMsgTokens > 0) {
+            await db.updateMessageTokenCount(lastUserMsg.timestamp, userMsgTokens)
+          }
+        }
+
+        await db.addMessage(threadId, 'assistant', modelId, fullContent, completionTokens, reasoning || null, durationMs || null)
+
+        if (totalTokens > 0) {
+          await db.updateThreadTotalTokens(threadId, totalTokens)
+        }
+
+        if (callCost > 0) {
+          await db.addToThreadCost(threadId, callCost)
+        }
+      } catch (err) {
+        console.error('Failed to save assistant message:', err)
+      }
+
+      loadMessages(threadId)
+      loadThreadTokenCount(threadId)
+      loadThreadCost(threadId)
+      loadThreads()
+    }
+
+    const unsubDone = db.onStreamDone(async (fullContent, usage, reasoning, durationMs) => {
       setIsStreaming(false)
       setStreamingContent('')
       setStreamingReasoning('')
@@ -133,41 +170,23 @@ function App() {
       if (pending) {
         const { threadId, modelId, msgs, prevTotalTokens } = pending
         pendingStreamRef.current = null
+        await saveAssistantMessage(threadId, modelId, msgs, prevTotalTokens, fullContent, usage, reasoning, durationMs)
+      }
+    })
 
-        const promptTokens = usage?.prompt_tokens || 0
-        const completionTokens = usage?.completion_tokens || 0
-        const totalTokens = promptTokens + completionTokens
-        const callCost = usage?.cost || 0
+    const unsubCancelled = db.onStreamCancelled(async (partialContent, partialReasoning, durationMs) => {
+      setIsStreaming(false)
+      setStreamingContent('')
+      setStreamingReasoning('')
 
-        try {
-          // Back-fill per-message token count on the last user message:
-          // prompt_tokens covers the entire context sent, so subtracting the previous
-          // thread total gives the tokens contributed by the new user turn.
-          if (promptTokens > 0) {
-            const userMsgTokens = promptTokens - prevTotalTokens
-            const lastUserMsg = msgs ? [...msgs].reverse().find(m => m.role === 'user') : null
-            if (lastUserMsg?.timestamp && userMsgTokens > 0) {
-              await db.updateMessageTokenCount(lastUserMsg.timestamp, userMsgTokens)
-            }
-          }
-
-          await db.addMessage(threadId, 'assistant', modelId, fullContent, completionTokens, reasoning || null)
-
-          if (totalTokens > 0) {
-            await db.updateThreadTotalTokens(threadId, totalTokens)
-          }
-
-          if (callCost > 0) {
-            await db.addToThreadCost(threadId, callCost)
-          }
-        } catch (err) {
-          console.error('Failed to save assistant message:', err)
+      const pending = pendingStreamRef.current
+      if (pending) {
+        const { threadId, modelId, msgs, prevTotalTokens } = pending
+        pendingStreamRef.current = null
+        // Save whatever partial content was received before cancellation
+        if (partialContent) {
+          await saveAssistantMessage(threadId, modelId, msgs, prevTotalTokens, partialContent, null, partialReasoning, durationMs)
         }
-
-        loadMessages(threadId)
-        loadThreadTokenCount(threadId)
-        loadThreadCost(threadId)
-        loadThreads()
       }
     })
 
@@ -175,6 +194,7 @@ function App() {
       unsubChunk()
       unsubReasoningChunk()
       unsubDone()
+      unsubCancelled()
     }
   }, [db.isReady, selectedThreadId])
 
@@ -665,7 +685,12 @@ function App() {
 
         {/* Input Area */}
         {selectedThreadId && (
-          <MessageInput onSend={handleSend} disabled={isStreaming} />
+          <MessageInput
+            onSend={handleSend}
+            onCancel={() => db.cancelChatStream()}
+            isStreaming={isStreaming}
+            disabled={false}
+          />
         )}
       </div>
 

@@ -82,9 +82,9 @@ export function useDatabase() {
       return await window.electronAPI.getMessagesByThread(threadId)
     },
 
-    addMessage: async (threadId, role, model, content, tokenCount, reasoningContent) => {
+    addMessage: async (threadId, role, model, content, tokenCount, reasoningContent, durationMs) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
-      return await window.electronAPI.addMessage(threadId, role, model, content, tokenCount, reasoningContent)
+      return await window.electronAPI.addMessage(threadId, role, model, content, tokenCount, reasoningContent, durationMs)
     },
 
     updateMessageContent: async (timestamp, content) => {
@@ -181,6 +181,11 @@ export function useDatabase() {
       return await window.electronAPI.sendChatStream(providerId, modelId, messages, samplingParams)
     },
 
+    cancelChatStream: async () => {
+      if (!window.electronAPI) return
+      return await window.electronAPI.cancelChatStream()
+    },
+
     generateThreadLabel: async (userMessageText) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
       return await window.electronAPI.generateThreadLabel(userMessageText)
@@ -199,6 +204,11 @@ export function useDatabase() {
     onStreamDone: (callback) => {
       if (!window.electronAPI) return () => {}
       return window.electronAPI.onStreamDone(callback)
+    },
+
+    onStreamCancelled: (callback) => {
+      if (!window.electronAPI) return () => {}
+      return window.electronAPI.onStreamCancelled(callback)
     },
   }
 }

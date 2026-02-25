@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { processPdf } from '../utils/pdfProcessor'
 
-function MessageInput({ onSend, disabled }) {
+function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState([])
   const [isDragOver, setIsDragOver] = useState(false)
@@ -276,7 +276,7 @@ function MessageInput({ onSend, disabled }) {
   }
 
   const handleSend = () => {
-    if ((!text.trim() && attachments.length === 0) || disabled || processingFiles > 0) return
+    if ((!text.trim() && attachments.length === 0) || disabled || isStreaming || processingFiles > 0) return
     onSend(text.trim(), attachments)
     setText('')
     setAttachments([])
@@ -401,7 +401,7 @@ function MessageInput({ onSend, disabled }) {
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={isDragOver ? 'Drop files here...' : 'Type your message... (Shift+Enter for new line)'}
-          disabled={disabled}
+          disabled={disabled || isStreaming}
           rows={1}
           className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm min-h-[40px] max-h-[200px] overflow-y-auto disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
           style={{ height: 'auto' }}
@@ -411,15 +411,27 @@ function MessageInput({ onSend, disabled }) {
           }}
         />
 
-        <button
-          onClick={handleSend}
-          disabled={disabled || processingFiles > 0 || (!text.trim() && attachments.length === 0)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
-        </button>
+        {isStreaming ? (
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex-shrink-0"
+            title="Cancel"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={disabled || processingFiles > 0 || (!text.trim() && attachments.length === 0)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {isDragOver && (

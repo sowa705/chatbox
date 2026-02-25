@@ -359,6 +359,16 @@ function ChatMessage({ message, onRetry, onEdit, isStreaming }) {
           { message.token_count !== undefined && (
             <span className="text-xs text-gray-500 ml-1">{message.token_count} tokens</span>
           )}
+          {/* Response time and tok/s (assistant messages only) */}
+          { message.duration_ms != null && message.role === 'assistant' && (() => {
+            const secs = message.duration_ms / 1000
+            const tps = message.token_count > 0 ? Math.round(message.token_count / secs) : null
+            return (
+              <span className="text-xs text-gray-500 ml-1">
+                {secs.toFixed(1)}s{tps != null ? ` · ${tps} tok/s` : ''}
+              </span>
+            )
+          })()}
         </div>
       )}
     </div>

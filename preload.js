@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Message operations
   getMessagesByThread: (threadId) => ipcRenderer.invoke('db:getMessagesByThread', threadId),
-  addMessage: (threadId, role, model, content, tokenCount, reasoningContent) => ipcRenderer.invoke('db:addMessage', threadId, role, model, content, tokenCount, reasoningContent),
+  addMessage: (threadId, role, model, content, tokenCount, reasoningContent, durationMs) => ipcRenderer.invoke('db:addMessage', threadId, role, model, content, tokenCount, reasoningContent, durationMs),
   updateMessageContent: (timestamp, content) => ipcRenderer.invoke('db:updateMessageContent', timestamp, content),
   updateMessageTokenCount: (timestamp, tokenCount) => ipcRenderer.invoke('db:updateMessageTokenCount', timestamp, tokenCount),
   deleteMessagesFrom: (threadId, fromTimestamp) => ipcRenderer.invoke('db:deleteMessagesFrom', threadId, fromTimestamp),
@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Streaming chat
   sendChatStream: (providerId, modelId, messages, samplingParams) => ipcRenderer.invoke('db:sendChatStream', providerId, modelId, messages, samplingParams),
+  cancelChatStream: () => ipcRenderer.invoke('db:cancelChatStream'),
   generateThreadLabel: (userMessageText) => ipcRenderer.invoke('db:generateThreadLabel', userMessageText),
   onStreamChunk: (callback) => {
     const listener = (event, chunk) => callback(chunk)
@@ -59,8 +60,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('chat:stream-reasoning-chunk', listener)
   },
   onStreamDone: (callback) => {
-    const listener = (event, fullContent, usage, reasoning) => callback(fullContent, usage, reasoning)
+    const listener = (event, fullContent, usage, reasoning, durationMs) => callback(fullContent, usage, reasoning, durationMs)
     ipcRenderer.on('chat:stream-done', listener)
     return () => ipcRenderer.removeListener('chat:stream-done', listener)
+  },
+  onStreamCancelled: (callback) => {
+    const listener = (event, partialContent, partialReasoning, durationMs) => callback(partialContent, partialReasoning, durationMs)
+    ipcRenderer.on('chat:stream-cancelled', listener)
+    return () => ipcRenderer.removeListener('chat:stream-cancelled', listener)
   },
 })

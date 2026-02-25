@@ -53,6 +53,7 @@ export function initDatabase() {
       content text not null,
       token_count integer default 0,
       reasoning_content text,
+      duration_ms integer default null,
       foreign key (thread_id) references threads(id)
     );
 
@@ -70,6 +71,7 @@ export function initDatabase() {
   // Migrations: add columns to existing databases that predate them
   try { db.exec(`ALTER TABLE threads ADD COLUMN total_cost REAL DEFAULT 0`) } catch {}
   try { db.exec(`ALTER TABLE attachments ADD COLUMN name TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE messages ADD COLUMN duration_ms INTEGER DEFAULT NULL`) } catch {}
 
   return db
 }
@@ -144,15 +146,15 @@ export const dbOperations = {
     return stmt.all(threadId)
   },
 
-  addMessage: (threadId, role, model, content, tokenCount = 0, reasoningContent = null) => {
+  addMessage: (threadId, role, model, content, tokenCount = 0, reasoningContent = null, durationMs = null) => {
     let ts = Date.now()
     // Ensure unique timestamp for each message
     while (db.prepare('SELECT 1 FROM messages WHERE timestamp = ?').get(ts)) {
       ts++
     }
 
-    const stmt = db.prepare('INSERT INTO messages (timestamp, thread_id, role, model, content, token_count, reasoning_content) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    stmt.run(ts, threadId, role, model, content, tokenCount, reasoningContent)
+    const stmt = db.prepare('INSERT INTO messages (timestamp, thread_id, role, model, content, token_count, reasoning_content, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    stmt.run(ts, threadId, role, model, content, tokenCount, reasoningContent, durationMs)
     // Touch thread updated_at
     db.prepare('UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(threadId)
     return ts
@@ -382,45 +384,76 @@ export async function sendChatStream(providerIdNum, modelId, messages, win, samp
     })
   }
 
+  // Store stream reference so it can be cancelled
+  activeStream = stream
+
   let fullContent = ''
   let fullReasoning = ''
   let usage = null
-  for await (const chunk of stream) {
-    const delta = chunk.choices?.[0]?.delta
-    const contentDelta = delta?.content || ''
-    fullContent += contentDelta
+  const streamStartTime = Date.now()
+  try {
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta
+      const contentDelta = delta?.content || ''
+      fullContent += contentDelta
 
-    // Capture reasoning tokens from various provider formats
-    let reasoningDelta = ''
-    if (delta?.reasoning_content) {
-      reasoningDelta = delta.reasoning_content
-    } else if (delta?.reasoning) {
-      reasoningDelta = delta.reasoning
-    } else if (delta?.reasoning_details && Array.isArray(delta.reasoning_details)) {
-      // Structured reasoning_details array (OpenRouter unified format)
-      for (const detail of delta.reasoning_details) {
-        if (detail.type === 'reasoning.text' && detail.text) {
-          reasoningDelta += detail.text
-        } else if (detail.type === 'reasoning.summary' && detail.summary) {
-          reasoningDelta += detail.summary
+      // Capture reasoning tokens from various provider formats
+      let reasoningDelta = ''
+      if (delta?.reasoning_content) {
+        reasoningDelta = delta.reasoning_content
+      } else if (delta?.reasoning) {
+        reasoningDelta = delta.reasoning
+      } else if (delta?.reasoning_details && Array.isArray(delta.reasoning_details)) {
+        // Structured reasoning_details array (OpenRouter unified format)
+        for (const detail of delta.reasoning_details) {
+          if (detail.type === 'reasoning.text' && detail.text) {
+            reasoningDelta += detail.text
+          } else if (detail.type === 'reasoning.summary' && detail.summary) {
+            reasoningDelta += detail.summary
+          }
         }
       }
-    }
 
-    if (reasoningDelta) {
-      fullReasoning += reasoningDelta
-      win.webContents.send('chat:stream-reasoning-chunk', reasoningDelta)
-    }
+      if (reasoningDelta) {
+        fullReasoning += reasoningDelta
+        win.webContents.send('chat:stream-reasoning-chunk', reasoningDelta)
+      }
 
-    if (chunk.usage) {
-      usage = chunk.usage
+      if (chunk.usage) {
+        usage = chunk.usage
+      }
+      if (contentDelta) {
+        win.webContents.send('chat:stream-chunk', contentDelta)
+      }
     }
-    if (contentDelta) {
-      win.webContents.send('chat:stream-chunk', contentDelta)
+  } catch (err) {
+    // Stream was aborted or errored — treat as cancellation if we have partial content
+    if (streamCancelled) {
+      streamCancelled = false
+      activeStream = null
+      const durationMs = Date.now() - streamStartTime
+      win.webContents.send('chat:stream-cancelled', fullContent, fullReasoning || null, durationMs)
+      return { content: fullContent, usage, reasoning: fullReasoning || null, durationMs, cancelled: true }
     }
+    throw err
   }
-  win.webContents.send('chat:stream-done', fullContent, usage, fullReasoning || null)
-  return { content: fullContent, usage, reasoning: fullReasoning || null }
+
+  activeStream = null
+  const durationMs = Date.now() - streamStartTime
+  win.webContents.send('chat:stream-done', fullContent, usage, fullReasoning || null, durationMs)
+  return { content: fullContent, usage, reasoning: fullReasoning || null, durationMs }
+}
+
+// Module-level state for the active stream
+let activeStream = null
+let streamCancelled = false
+
+export function cancelChatStream() {
+  if (activeStream) {
+    streamCancelled = true
+    activeStream.controller?.abort()
+    activeStream = null
+  }
 }
 
 export async function testProvider(providerId) {

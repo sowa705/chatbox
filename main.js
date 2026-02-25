@@ -3,7 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
 import os from 'os'
-import { initDatabase, closeDatabase, dbOperations, testProvider, listProviderModels, sendChatStream, generateThreadLabel } from './database.js'
+import { initDatabase, closeDatabase, dbOperations, testProvider, listProviderModels, sendChatStream, cancelChatStream, generateThreadLabel } from './database.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -71,8 +71,8 @@ function setupIpcHandlers() {
     return dbOperations.getMessagesByThread(threadId)
   })
 
-  ipcMain.handle('db:addMessage', async (event, threadId, role, model, content, tokenCount, reasoningContent) => {
-    return dbOperations.addMessage(threadId, role, model, content, tokenCount, reasoningContent)
+  ipcMain.handle('db:addMessage', async (event, threadId, role, model, content, tokenCount, reasoningContent, durationMs) => {
+    return dbOperations.addMessage(threadId, role, model, content, tokenCount, reasoningContent, durationMs)
   })
 
   ipcMain.handle('db:updateMessageContent', async (event, timestamp, content) => {
@@ -154,6 +154,10 @@ function setupIpcHandlers() {
   ipcMain.handle('db:sendChatStream', async (event, providerId, modelId, messages, samplingParams) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     return await sendChatStream(providerId, modelId, messages, win, samplingParams || {})
+  })
+
+  ipcMain.handle('db:cancelChatStream', () => {
+    cancelChatStream()
   })
 
   // Thread label generation
