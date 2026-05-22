@@ -18,11 +18,12 @@
   "main": "main.js",
   "type": "module",
   "scripts": {
+    "agent:build": "node scripts/build-agent-image.js",
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run agent:build && vite build",
     "preview": "vite preview",
-    "electron": "electron .",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron": "npm run agent:build && electron .",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run agent:build && cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build && electron-builder",
     "electron:build:mac": "npm run build && electron-builder --mac",
     "electron:build:win": "npm run build && electron-builder --win",
@@ -43,11 +44,14 @@
       "dist/**/*",
       "main.js",
       "preload.js",
-      "database.js"
+      "database.js",
+      "agentRuntime.js",
+      "agent/**/*"
     ],
     "asar": true,
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
+      "node_modules/better-sqlite3/**/*",
+      "agent/**/*"
     ],
     "mac": {
       "target": [
@@ -105,10 +109,11 @@
     }
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.6.2",
     "highlight.js": "^11.11.1",
+    "mime-types": "^3.0.2",
     "openai": "^6.22.0",
-    "pdfjs-dist": "^5.4.624",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",

@@ -18,12 +18,54 @@ function App() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [streamingReasoning, setStreamingReasoning] = useState('')
+  const [streamingToolEvents, setStreamingToolEvents] = useState([])
   const [threadTokenCount, setThreadTokenCount] = useState(0)
   const [threadCost, setThreadCost] = useState(0)
   const [threadSamplingParams, setThreadSamplingParams] = useState({})
   const messagesEndRef = useRef(null)
+  const streamingMessageTimestampRef = useRef(null)
   // Refs to carry streaming context into the onStreamDone callback
   const pendingStreamRef = useRef(null) // { threadId, modelId }
+
+  const appendStreamingTextEvent = useCallback((eventType, chunk, sequenceIndex) => {
+    if (!chunk) return
+    setStreamingToolEvents(prev => {
+      const fallbackSequence = prev.reduce((max, event) => Math.max(max, event.sequence_index ?? -1), -1) + 1
+      const normalizedSequence = Number.isFinite(sequenceIndex) ? sequenceIndex : fallbackSequence
+      const last = prev[prev.length - 1]
+
+      if (last?.event_type === eventType && last.sequence_index === normalizedSequence) {
+        return prev.map((event, index) => index === prev.length - 1
+          ? { ...event, text: `${event.text || ''}${chunk}` }
+          : event
+        )
+      }
+
+      const existingIndex = prev.findIndex(event =>
+        event.event_type === eventType &&
+        event.sequence_index === normalizedSequence
+      )
+      if (existingIndex !== -1) {
+        return prev.map((event, index) => index === existingIndex
+          ? { ...event, text: `${event.text || ''}${chunk}` }
+          : event
+        )
+      }
+
+      return [
+        ...prev,
+        {
+          id: `stream-${eventType}-${normalizedSequence}`,
+          event_type: eventType,
+          sequence_index: normalizedSequence,
+          _live: true,
+          tool_name: eventType === 'content' ? '__content__' : '__reasoning__',
+          status: 'success',
+          text: chunk
+        }
+      ]
+    })
+  }, [])
 
   // Load threads and all models on mount, then restore last used model
   useEffect(() => {
@@ -109,19 +151,24 @@ function App() {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingContent])
+    messagesEndRef.current?.scrollIntoView({
+      behavior: isStreaming ? 'auto' : 'smooth',
+      block: 'end'
+    })
+  }, [messages, streamingContent, streamingReasoning, streamingToolEvents, isStreaming])
 
   // Subscribe to streaming events
   useEffect(() => {
     if (!db.isReady) return
 
-    const unsubChunk = db.onStreamChunk((chunk) => {
+    const unsubChunk = db.onStreamChunk((chunk, sequenceIndex) => {
       setStreamingContent(prev => prev + chunk)
+      appendStreamingTextEvent('content', chunk, sequenceIndex)
     })
 
-    const unsubReasoningChunk = db.onStreamReasoningChunk((chunk) => {
+    const unsubReasoningChunk = db.onStreamReasoningChunk((chunk, sequenceIndex) => {
       setStreamingReasoning(prev => prev + chunk)
+      appendStreamingTextEvent('reasoning', chunk, sequenceIndex)
     })
 
     const saveAssistantMessage = async (threadId, modelId, msgs, prevTotalTokens, fullContent, usage, reasoning, durationMs) => {
@@ -142,7 +189,8 @@ function App() {
           }
         }
 
-        await db.addMessage(threadId, 'assistant', modelId, fullContent, completionTokens, reasoning || null, durationMs || null)
+        const assistantTs = await db.addMessage(threadId, 'assistant', modelId, fullContent, completionTokens, reasoning || null, durationMs || null)
+        await db.assignPendingToolEventsToMessage(threadId, assistantTs)
 
         if (totalTokens > 0) {
           await db.updateThreadTotalTokens(threadId, totalTokens)
@@ -165,6 +213,8 @@ function App() {
       setIsStreaming(false)
       setStreamingContent('')
       setStreamingReasoning('')
+      setStreamingToolEvents([])
+      streamingMessageTimestampRef.current = null
 
       const pending = pendingStreamRef.current
       if (pending) {
@@ -178,6 +228,8 @@ function App() {
       setIsStreaming(false)
       setStreamingContent('')
       setStreamingReasoning('')
+      setStreamingToolEvents([])
+      streamingMessageTimestampRef.current = null
 
       const pending = pendingStreamRef.current
       if (pending) {
@@ -190,13 +242,42 @@ function App() {
       }
     })
 
+    const unsubToolEvent = db.onToolEvent((event) => {
+      const nextEvent = {
+        event_type: event.eventType || 'tool',
+        sequence_index: event.sequenceIndex || 0,
+        _live: true,
+        tool_name: event.toolName,
+        status: event.status,
+        duration_ms: event.durationMs || null,
+        arguments: event.arguments || {},
+        result: event.result || (event.error ? { content: [{ type: 'text', text: event.error }], isError: true } : null),
+        text: event.text || null
+      }
+      setStreamingToolEvents(prev => {
+        if (nextEvent.event_type === 'tool' && event.status !== 'running') {
+          const index = [...prev].reverse().findIndex(item =>
+            item.event_type === 'tool' &&
+            item.sequence_index === nextEvent.sequence_index &&
+            item.status === 'running'
+          )
+          if (index !== -1) {
+            const actualIndex = prev.length - 1 - index
+            return prev.map((item, i) => i === actualIndex ? { ...item, ...nextEvent, arguments: item.arguments } : item)
+          }
+        }
+        return [...prev, { ...nextEvent, id: `${Date.now()}-${prev.length}` }]
+      })
+    })
+
     return () => {
       unsubChunk()
       unsubReasoningChunk()
       unsubDone()
       unsubCancelled()
+      unsubToolEvent()
     }
-  }, [db.isReady, selectedThreadId])
+  }, [db.isReady, selectedThreadId, appendStreamingTextEvent])
 
   const loadThreads = async () => {
     try {
@@ -210,14 +291,21 @@ function App() {
   const loadMessages = async (threadId) => {
     try {
       const data = await db.getMessagesByThread(threadId)
+      const toolEvents = await db.getToolEventsByThread(threadId).catch(() => [])
+      const eventsByMessage = toolEvents.reduce((acc, event) => {
+        if (!event.message_id) return acc
+        if (!acc[event.message_id]) acc[event.message_id] = []
+        acc[event.message_id].push(event)
+        return acc
+      }, {})
       // Load attachments for each message
       const withAttachments = await Promise.all(
         (data || []).map(async (msg) => {
           try {
             const atts = await db.getAttachmentsByMessage(msg.timestamp)
-            return { ...msg, attachments: atts || [] }
+            return { ...msg, attachments: atts || [], toolEvents: eventsByMessage[msg.timestamp] || [] }
           } catch {
-            return { ...msg, attachments: [] }
+            return { ...msg, attachments: [], toolEvents: eventsByMessage[msg.timestamp] || [] }
           }
         })
       )
@@ -257,6 +345,7 @@ function App() {
       setSelectedThreadId(Number(threadId))
     } catch (err) {
       console.error('Failed to create thread:', err)
+      alert(`Failed to create thread: ${err.message}`)
     }
   }
 
@@ -271,6 +360,16 @@ function App() {
       await loadThreads()
     } catch (err) {
       console.error('Failed to delete thread:', err)
+    }
+  }
+
+  const handleOpenWorkspace = async () => {
+    if (!selectedThreadId) return
+    try {
+      await db.openThreadWorkspace(selectedThreadId)
+    } catch (err) {
+      console.error('Failed to open workspace:', err)
+      alert(`Failed to open workspace: ${err.message}`)
     }
   }
 
@@ -329,6 +428,30 @@ function App() {
     }
   }
 
+  const modelSupportsAttachmentType = (type) => {
+    const modalities = selectedModel?.modalities
+    if (!modalities) return true
+    if (type === 'image') return modalities.includes('image') || modalities.includes('file')
+    if (type === 'audio') return modalities.includes('audio')
+    if (type === 'video') return modalities.includes('video')
+    return true
+  }
+
+  const attachmentWorkspaceReference = (att) => {
+    const workspacePath = att.workspace_path
+      ? `/workspace/${att.workspace_path}`
+      : null
+    const details = [
+      `Attached file: ${att.name || 'file'}`,
+      `Type: ${att.type || 'file'}`,
+      att.mime_type ? `MIME: ${att.mime_type}` : null,
+      workspacePath ? `Workspace path: ${workspacePath}` : null,
+      att.size_bytes ? `Size: ${att.size_bytes} bytes` : null,
+      'Use workspace tools to inspect or manipulate this file.'
+    ].filter(Boolean)
+    return details.join('\n')
+  }
+
   const buildApiMessages = (msgs) => {
     // Build OpenAI-compatible messages array, including any attachments per message
     return msgs.map(m => {
@@ -343,7 +466,12 @@ function App() {
         parts.push({ type: 'text', text: m.content })
       }
       for (const att of atts) {
-        if (att.type === 'image') {
+        if (!modelSupportsAttachmentType(att.type)) {
+          parts.push({
+            type: 'text',
+            text: attachmentWorkspaceReference(att)
+          })
+        } else if (att.type === 'image') {
           parts.push({
             type: 'image_url',
             image_url: { url: att.content || att.data }
@@ -377,9 +505,17 @@ function App() {
             video_url: { url: raw }
           })
         } else {
+          const raw = att.content || att.data || ''
+          if (typeof raw === 'string' && raw.startsWith('data:')) {
+            parts.push({
+              type: 'text',
+              text: attachmentWorkspaceReference(att)
+            })
+            continue
+          }
           parts.push({
             type: 'text',
-            text: `[Attached file: ${att.name || 'document'}]\n${att.content || att.data}`
+            text: `[Attached file: ${att.name || 'document'}]\n${raw}`
           })
         }
       }
@@ -396,6 +532,8 @@ function App() {
     setIsStreaming(true)
     setStreamingContent('')
     setStreamingReasoning('')
+    setStreamingToolEvents([])
+    streamingMessageTimestampRef.current = Date.now()
 
     // Snapshot token count before sending so onStreamDone can compute the user message delta
     const prevTotalTokens = await db.getThreadTokenCount(threadId).catch(() => 0)
@@ -410,7 +548,8 @@ function App() {
         selectedModel.providerId,
         selectedModel.modelId,
         apiMessages,
-        threadSamplingParams
+        threadSamplingParams,
+        threadId
       )
     } catch (err) {
       console.error('Chat error:', err)
@@ -449,7 +588,7 @@ function App() {
 
       // Save attachments
       for (const att of attachments) {
-        await db.addAttachment(msgTs, att.type, att.data, att.name || null)
+        await db.addAttachment(msgTs, att.type, att.data, att.name || null, att.mimeType || null)
       }
 
       // Reload to include the new user message
@@ -510,7 +649,7 @@ function App() {
 
       // Re-attach the original attachments to the new message timestamp
       for (const att of originalAttachments) {
-        await db.addAttachment(newTs, att.type, att.content || att.data, att.name || null)
+        await db.addAttachment(newTs, att.type, att.content || att.data, att.name || null, att.mime_type || att.mimeType || null)
       }
 
       await loadMessages(selectedThreadId)
@@ -545,13 +684,15 @@ function App() {
 
   // Build display messages with streaming placeholder
   const displayMessages = [...messages]
-  if (isStreaming && (streamingContent || streamingReasoning)) {
+  if (isStreaming && (streamingContent || streamingReasoning || streamingToolEvents.length > 0)) {
     displayMessages.push({
-      timestamp: Date.now(),
+      timestamp: streamingMessageTimestampRef.current || Date.now(),
+      thread_id: selectedThreadId,
       role: 'assistant',
       model: selectedModel?.modelId || '',
       content: streamingContent,
       reasoning_content: streamingReasoning || null,
+      toolEvents: streamingToolEvents,
       _streaming: true
     })
   }
@@ -640,9 +781,23 @@ function App() {
       <div className={`flex-1 flex flex-col ${isSettingsOpen ? 'blur-sm' : ''}`}>
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {selectedThread ? selectedThread.label || 'Untitled Thread' : 'Select a thread'}
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+              {selectedThread ? selectedThread.label || 'Untitled Thread' : 'Select a thread'}
+            </h2>
+            {selectedThreadId && (
+              <button
+                onClick={handleOpenWorkspace}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                title="Open workspace folder"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7.5A2.5 2.5 0 015.5 5H9l2 2h7.5A2.5 2.5 0 0121 9.5v7A2.5 2.5 0 0118.5 19h-13A2.5 2.5 0 013 16.5v-9z" />
+                </svg>
+                Workspace
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Messages */}
@@ -658,9 +813,9 @@ function App() {
                   isStreaming={msg._streaming}
                 />
               ))}
-              {isStreaming && !streamingContent && !streamingReasoning && (
+              {isStreaming && !streamingContent && !streamingReasoning && streamingToolEvents.length === 0 && (
                 <div className="flex items-start">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm border border-gray-200 dark:border-gray-700">
+                  <div className="px-1 py-3">
                     <div className="flex gap-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import ProvidersSettings from './ProvidersSettings'
 import GeneralSettings from './GeneralSettings'
+import McpSettings from './McpSettings'
 
 function SettingsModal({ isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState('general')
@@ -50,6 +51,16 @@ function SettingsModal({ isOpen, onClose }) {
               Providers
             </button>
             <button
+              onClick={() => setActiveTab('mcp')}
+              className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                activeTab === 'mcp'
+                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-medium'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              MCP Servers
+            </button>
+            <button
               onClick={() => setActiveTab('about')}
               className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                 activeTab === 'about'
@@ -67,7 +78,13 @@ function SettingsModal({ isOpen, onClose }) {
           {/* Header */}
           <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              {activeTab === 'general' ? 'General' : activeTab === 'providers' ? 'Provider Configuration' : 'About'}
+              {activeTab === 'general'
+                ? 'General'
+                : activeTab === 'providers'
+                  ? 'Provider Configuration'
+                  : activeTab === 'mcp'
+                    ? 'MCP Servers'
+                    : 'About'}
             </h3>
             <button
               onClick={onClose}
@@ -83,6 +100,7 @@ function SettingsModal({ isOpen, onClose }) {
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === 'general' && <GeneralSettings />}
             {activeTab === 'providers' && <ProvidersSettings />}
+            {activeTab === 'mcp' && <McpSettings />}
             {activeTab === 'about' && (
               <div className="space-y-4">
                 <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">ChatBox</h4>

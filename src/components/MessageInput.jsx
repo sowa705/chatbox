@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { processPdf } from '../utils/pdfProcessor'
 
 function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
   const [text, setText] = useState('')
@@ -32,15 +31,6 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
     })
   }
 
-  const readFileAsArrayBuffer = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result)
-      reader.onerror = reject
-      reader.readAsArrayBuffer(file)
-    })
-  }
-
   const processFile = async (file) => {
     const isImage = file.type.startsWith('image/')
     const isAudio = file.type.startsWith('audio/')
@@ -55,6 +45,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
       return {
         type: 'image',
         name: file.name,
+        mimeType: file.type,
         data: base64,
         preview: base64
       }
@@ -63,6 +54,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
       return {
         type: 'audio',
         name: file.name,
+        mimeType: file.type,
         data: base64,
         preview: base64
       }
@@ -71,30 +63,18 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
       return {
         type: 'video',
         name: file.name,
+        mimeType: file.type,
         data: base64,
         preview: base64
       }
     } else if (isPdf) {
-      const arrayBuffer = await readFileAsArrayBuffer(file)
-      const result = await processPdf(arrayBuffer, file.name)
-
-      if (result.type === 'text') {
-        // Text-based PDF: attach as a document with extracted text
-        return {
-          type: 'document',
-          name: file.name,
-          data: result.text,
-          preview: null,
-          pdfPageCount: result.pageCount
-        }
-      } else {
-        // Scanned/image PDF: return an array of image attachments
-        return result.images.map((img) => ({
-          type: 'image',
-          name: `${file.name} (page ${img.page}/${result.pageCount})`,
-          data: img.data,
-          preview: img.data
-        }))
+      const base64 = await readFileAsBase64(file)
+      return {
+        type: 'document',
+        name: file.name,
+        mimeType: file.type || 'application/pdf',
+        data: base64,
+        preview: null
       }
     } else if (isText || file.size < 100000) {
       // Try reading as text for text-like files
@@ -103,6 +83,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
         return {
           type: 'document',
           name: file.name,
+          mimeType: file.type || 'text/plain',
           data: content,
           preview: null
         }
@@ -112,6 +93,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
         return {
           type: 'document',
           name: file.name,
+          mimeType: file.type || 'application/octet-stream',
           data: base64,
           preview: null
         }
@@ -121,6 +103,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
       return {
         type: 'document',
         name: file.name,
+        mimeType: file.type || 'application/octet-stream',
         data: base64,
         preview: null
       }
@@ -177,6 +160,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
         setAttachments(prev => [...prev, {
           type: 'audio',
           name: `Recording ${timestamp}`,
+          mimeType: mediaRecorder.mimeType,
           data: base64,
           audioFormat: format,
           preview: base64
@@ -216,12 +200,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
     for (const file of files) {
       try {
         const result = await processFile(file)
-        // processFile may return an array (e.g. scanned PDF pages) or a single object
-        if (Array.isArray(result)) {
-          processed.push(...result)
-        } else {
-          processed.push(result)
-        }
+        processed.push(result)
       } catch (err) {
         console.error('Failed to process file:', file.name, err)
       }
@@ -338,7 +317,7 @@ function MessageInput({ onSend, onCancel, isStreaming, disabled }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <span className="text-xs">Processing PDF...</span>
+              <span className="text-xs">Processing files...</span>
             </div>
           )}
         </div>

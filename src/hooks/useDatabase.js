@@ -76,6 +76,11 @@ export function useDatabase() {
       return await window.electronAPI.deleteThread(threadId)
     },
 
+    openThreadWorkspace: async (threadId) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.openThreadWorkspace(threadId)
+    },
+
     // Message operations
     getMessagesByThread: async (threadId) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
@@ -128,9 +133,9 @@ export function useDatabase() {
     },
 
     // Attachment operations
-    addAttachment: async (messageId, type, content, name) => {
+    addAttachment: async (messageId, type, content, name, mimeType) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
-      return await window.electronAPI.addAttachment(messageId, type, content, name)
+      return await window.electronAPI.addAttachment(messageId, type, content, name, mimeType)
     },
 
     getAttachmentsByMessage: async (messageId) => {
@@ -176,9 +181,9 @@ export function useDatabase() {
     },
 
     // Streaming chat
-    sendChatStream: async (providerId, modelId, messages, samplingParams) => {
+    sendChatStream: async (providerId, modelId, messages, samplingParams, threadId) => {
       if (!window.electronAPI) throw new Error('Electron API not available')
-      return await window.electronAPI.sendChatStream(providerId, modelId, messages, samplingParams)
+      return await window.electronAPI.sendChatStream(providerId, modelId, messages, samplingParams, threadId)
     },
 
     cancelChatStream: async () => {
@@ -209,6 +214,46 @@ export function useDatabase() {
     onStreamCancelled: (callback) => {
       if (!window.electronAPI) return () => {}
       return window.electronAPI.onStreamCancelled(callback)
+    },
+
+    onToolEvent: (callback) => {
+      if (!window.electronAPI) return () => {}
+      return window.electronAPI.onToolEvent(callback)
+    },
+
+    getAllMcpServers: async () => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.getAllMcpServers()
+    },
+
+    createMcpServer: async (server) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.createMcpServer(server)
+    },
+
+    updateMcpServer: async (id, server) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.updateMcpServer(id, server)
+    },
+
+    deleteMcpServer: async (id) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.deleteMcpServer(id)
+    },
+
+    testMcpServer: async (server) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.testMcpServer(server)
+    },
+
+    getToolEventsByThread: async (threadId) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.getToolEventsByThread(threadId)
+    },
+
+    assignPendingToolEventsToMessage: async (threadId, messageId) => {
+      if (!window.electronAPI) throw new Error('Electron API not available')
+      return await window.electronAPI.assignPendingToolEventsToMessage(threadId, messageId)
     },
   }
 }

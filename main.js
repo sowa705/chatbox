@@ -1,9 +1,20 @@
-import { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
 import os from 'os'
-import { initDatabase, closeDatabase, dbOperations, testProvider, listProviderModels, sendChatStream, cancelChatStream, generateThreadLabel } from './database.js'
+import { initDatabase, closeDatabase, dbOperations, testProvider, listProviderModels, generateThreadLabel } from './database.js'
+import {
+  ensureThreadWorkspace,
+  deleteThreadWorkspace,
+  runAgentChatStream,
+  cancelAgentStream,
+  copyAttachmentToWorkspace,
+  stopAllContainers,
+  testMcpServer,
+  previewThreadFile,
+  resolveThreadFilePath
+} from './agentRuntime.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -51,7 +62,9 @@ function setupIpcHandlers() {
   })
 
   ipcMain.handle('db:createThread', async (event, model) => {
-    return dbOperations.createThread(model)
+    const threadId = dbOperations.createThread(model)
+    await ensureThreadWorkspace(threadId)
+    return threadId
   })
 
   ipcMain.handle('db:setThreadLabel', async (event, threadId, label) => {
@@ -63,7 +76,44 @@ function setupIpcHandlers() {
   })
 
   ipcMain.handle('db:deleteThread', async (event, threadId) => {
+    const thread = dbOperations.getThreadById(threadId)
+    await deleteThreadWorkspace(thread)
     return dbOperations.deleteThread(threadId)
+  })
+
+  ipcMain.handle('workspace:openThread', async (event, threadId) => {
+    const thread = dbOperations.getThreadById(threadId)
+    const workspacePath = thread?.workspace_path || path.join(app.getPath('userData'), 'agent-workspaces', `thread-${threadId}`)
+    fs.mkdirSync(workspacePath, { recursive: true })
+    const error = await shell.openPath(workspacePath)
+    if (error) throw new Error(error)
+    return { success: true, workspacePath }
+  })
+
+  ipcMain.handle('workspace:previewFile', async (event, threadId, filePath, title) => {
+    return previewThreadFile(threadId, filePath, title)
+  })
+
+  ipcMain.handle('workspace:openContainingFolder', async (event, threadId, filePath) => {
+    const resolved = resolveThreadFilePath(threadId, filePath)
+    shell.showItemInFolder(resolved.filePath)
+    return { success: true, filePath: resolved.filePath }
+  })
+
+  ipcMain.handle('workspace:copyFilePath', async (event, threadId, filePath) => {
+    const resolved = resolveThreadFilePath(threadId, filePath)
+    clipboard.writeText(resolved.filePath)
+    return { success: true, filePath: resolved.filePath }
+  })
+
+  ipcMain.handle('workspace:saveFileAs', async (event, threadId, filePath) => {
+    const resolved = resolveThreadFilePath(threadId, filePath)
+    const { filePath: targetPath, canceled } = await dialog.showSaveDialog({
+      defaultPath: path.basename(resolved.filePath)
+    })
+    if (canceled || !targetPath) return { success: false }
+    fs.copyFileSync(resolved.filePath, targetPath)
+    return { success: true, filePath: targetPath }
   })
 
   // Message operations
@@ -108,12 +158,54 @@ function setupIpcHandlers() {
   })
 
   // Attachment operations
-  ipcMain.handle('db:addAttachment', async (event, messageId, type, content, name) => {
-    return dbOperations.addAttachment(messageId, type, content, name)
+  ipcMain.handle('db:addAttachment', async (event, messageId, type, content, name, mimeType) => {
+    const message = dbOperations.getMessageByTimestamp(messageId)
+    let workspaceInfo = { workspaceRelativePath: null, mimeType: mimeType || null, sizeBytes: null }
+    if (message?.thread_id) {
+      workspaceInfo = await copyAttachmentToWorkspace(message.thread_id, { type, content, name, mimeType })
+    }
+    return dbOperations.addAttachment(
+      messageId,
+      type,
+      content,
+      name,
+      workspaceInfo.mimeType,
+      workspaceInfo.workspaceRelativePath,
+      workspaceInfo.sizeBytes
+    )
   })
 
   ipcMain.handle('db:getAttachmentsByMessage', async (event, messageId) => {
     return dbOperations.getAttachmentsByMessage(messageId)
+  })
+
+  // MCP server operations
+  ipcMain.handle('mcp:getAllServers', async () => {
+    return dbOperations.getAllMcpServers()
+  })
+
+  ipcMain.handle('mcp:createServer', async (event, server) => {
+    return dbOperations.createMcpServer(server)
+  })
+
+  ipcMain.handle('mcp:updateServer', async (event, id, server) => {
+    return dbOperations.updateMcpServer(id, server)
+  })
+
+  ipcMain.handle('mcp:deleteServer', async (event, id) => {
+    return dbOperations.deleteMcpServer(id)
+  })
+
+  ipcMain.handle('mcp:testServer', async (event, server) => {
+    return await testMcpServer(server)
+  })
+
+  ipcMain.handle('tools:getEventsByThread', async (event, threadId) => {
+    return dbOperations.getToolEventsByThread(threadId)
+  })
+
+  ipcMain.handle('tools:assignPendingToMessage', async (event, threadId, messageId) => {
+    return dbOperations.assignPendingToolEventsToMessage(threadId, messageId)
   })
 
   // Provider operations
@@ -151,13 +243,13 @@ function setupIpcHandlers() {
   })
 
   // Streaming chat
-  ipcMain.handle('db:sendChatStream', async (event, providerId, modelId, messages, samplingParams) => {
+  ipcMain.handle('db:sendChatStream', async (event, providerId, modelId, messages, samplingParams, threadId) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    return await sendChatStream(providerId, modelId, messages, win, samplingParams || {})
+    return await runAgentChatStream(providerId, modelId, messages, win, samplingParams || {}, threadId || null)
   })
 
   ipcMain.handle('db:cancelChatStream', () => {
-    cancelChatStream()
+    cancelAgentStream()
   })
 
   // Thread label generation
@@ -258,6 +350,10 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  stopAllContainers().catch(err => console.warn('Failed to stop agent containers:', err))
 })
 
 app.on('window-all-closed', () => {

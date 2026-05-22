@@ -41,7 +41,10 @@ export function initDatabase() {
       selected_model TEXT,
       total_tokens INTEGER DEFAULT 0,
       total_cost REAL DEFAULT 0,
-      sampling_params TEXT
+      sampling_params TEXT,
+      workspace_path TEXT,
+      container_id TEXT,
+      container_status TEXT
     );
 
     create table if not exists messages (
@@ -62,7 +65,42 @@ export function initDatabase() {
         message_id integer not null,
         type text not null,
         content blob not null,
+        name TEXT,
+        mime_type TEXT,
+        workspace_path TEXT,
+        size_bytes INTEGER,
         foreign key (message_id) references messages(timestamp)
+    );
+
+    create table if not exists mcp_servers (
+      id integer primary key autoincrement,
+      name text not null,
+      transport text not null,
+      command text,
+      args_json text,
+      env_json text,
+      url text,
+      headers_json text,
+      enabled integer default 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    create table if not exists tool_events (
+      id integer primary key autoincrement,
+      thread_id integer not null,
+      message_id integer,
+      event_type text default 'tool',
+      sequence_index integer default 0,
+      tool_call_id text,
+      tool_name text not null,
+      arguments_json text,
+      result_json text,
+      text text,
+      status text not null,
+      duration_ms integer,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      foreign key (thread_id) references threads(id)
     );
   `)
 
@@ -72,6 +110,15 @@ export function initDatabase() {
   try { db.exec(`ALTER TABLE threads ADD COLUMN total_cost REAL DEFAULT 0`) } catch {}
   try { db.exec(`ALTER TABLE attachments ADD COLUMN name TEXT`) } catch {}
   try { db.exec(`ALTER TABLE messages ADD COLUMN duration_ms INTEGER DEFAULT NULL`) } catch {}
+  try { db.exec(`ALTER TABLE threads ADD COLUMN workspace_path TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE threads ADD COLUMN container_id TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE threads ADD COLUMN container_status TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE attachments ADD COLUMN mime_type TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE attachments ADD COLUMN workspace_path TEXT`) } catch {}
+  try { db.exec(`ALTER TABLE attachments ADD COLUMN size_bytes INTEGER`) } catch {}
+  try { db.exec(`ALTER TABLE tool_events ADD COLUMN event_type TEXT DEFAULT 'tool'`) } catch {}
+  try { db.exec(`ALTER TABLE tool_events ADD COLUMN sequence_index INTEGER DEFAULT 0`) } catch {}
+  try { db.exec(`ALTER TABLE tool_events ADD COLUMN text TEXT`) } catch {}
 
   return db
 }
@@ -126,6 +173,16 @@ export const dbOperations = {
     stmt.run(model, threadId)
   },
 
+  updateThreadWorkspace: (threadId, workspacePath, containerId = null, containerStatus = null) => {
+    const stmt = db.prepare('UPDATE threads SET workspace_path = ?, container_id = ?, container_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    stmt.run(workspacePath, containerId, containerStatus, threadId)
+  },
+
+  updateThreadContainer: (threadId, containerId, containerStatus) => {
+    const stmt = db.prepare('UPDATE threads SET container_id = ?, container_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    stmt.run(containerId, containerStatus, threadId)
+  },
+
   setThreadLabel: (threadId, label) => {
     const stmt = db.prepare('UPDATE threads SET label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     stmt.run(label, threadId)
@@ -144,6 +201,11 @@ export const dbOperations = {
   getMessagesByThread: (threadId) => {
     const stmt = db.prepare('SELECT * FROM messages WHERE thread_id = ? AND deleted = 0 ORDER BY timestamp ASC')
     return stmt.all(threadId)
+  },
+
+  getMessageByTimestamp: (timestamp) => {
+    const stmt = db.prepare('SELECT * FROM messages WHERE timestamp = ?')
+    return stmt.get(timestamp)
   },
 
   addMessage: (threadId, role, model, content, tokenCount = 0, reasoningContent = null, durationMs = null) => {
@@ -204,14 +266,113 @@ export const dbOperations = {
   },
 
   // Attachment operations
-  addAttachment: (messageId, type, content, name = null) => {
-    const stmt = db.prepare('INSERT INTO attachments (message_id, type, content, name) VALUES (?, ?, ?, ?)')
-    stmt.run(messageId, type, content, name)
+  addAttachment: (messageId, type, content, name = null, mimeType = null, workspacePath = null, sizeBytes = null) => {
+    const stmt = db.prepare('INSERT INTO attachments (message_id, type, content, name, mime_type, workspace_path, size_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    stmt.run(messageId, type, content, name, mimeType, workspacePath, sizeBytes)
   },
 
   getAttachmentsByMessage: (messageId) => {
     const stmt = db.prepare('SELECT * FROM attachments WHERE message_id = ?')
     return stmt.all(messageId)
+  },
+
+  // MCP server operations
+  getAllMcpServers: () => {
+    const stmt = db.prepare('SELECT * FROM mcp_servers ORDER BY id')
+    return stmt.all().map(row => ({
+      ...row,
+      args: row.args_json ? JSON.parse(row.args_json) : [],
+      env: row.env_json ? JSON.parse(row.env_json) : {},
+      headers: row.headers_json ? JSON.parse(row.headers_json) : {},
+      enabled: !!row.enabled
+    }))
+  },
+
+  getEnabledMcpServers: () => {
+    const stmt = db.prepare('SELECT * FROM mcp_servers WHERE enabled = 1 ORDER BY id')
+    return stmt.all().map(row => ({
+      ...row,
+      args: row.args_json ? JSON.parse(row.args_json) : [],
+      env: row.env_json ? JSON.parse(row.env_json) : {},
+      headers: row.headers_json ? JSON.parse(row.headers_json) : {},
+      enabled: !!row.enabled
+    }))
+  },
+
+  createMcpServer: (server) => {
+    const stmt = db.prepare(`
+      INSERT INTO mcp_servers (name, transport, command, args_json, env_json, url, headers_json, enabled)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    const result = stmt.run(
+      server.name,
+      server.transport,
+      server.command || null,
+      JSON.stringify(server.args || []),
+      JSON.stringify(server.env || {}),
+      server.url || null,
+      JSON.stringify(server.headers || {}),
+      server.enabled ? 1 : 0
+    )
+    return result.lastInsertRowid
+  },
+
+  updateMcpServer: (id, server) => {
+    const stmt = db.prepare(`
+      UPDATE mcp_servers
+      SET name = ?, transport = ?, command = ?, args_json = ?, env_json = ?, url = ?, headers_json = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    stmt.run(
+      server.name,
+      server.transport,
+      server.command || null,
+      JSON.stringify(server.args || []),
+      JSON.stringify(server.env || {}),
+      server.url || null,
+      JSON.stringify(server.headers || {}),
+      server.enabled ? 1 : 0,
+      id
+    )
+  },
+
+  deleteMcpServer: (id) => {
+    db.prepare('DELETE FROM mcp_servers WHERE id = ?').run(id)
+  },
+
+  addToolEvent: (event) => {
+    const stmt = db.prepare(`
+      INSERT INTO tool_events (thread_id, message_id, event_type, sequence_index, tool_call_id, tool_name, arguments_json, result_json, text, status, duration_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    const result = stmt.run(
+      event.threadId,
+      event.messageId || null,
+      event.eventType || 'tool',
+      event.sequenceIndex || 0,
+      event.toolCallId || null,
+      event.toolName || '__reasoning__',
+      JSON.stringify(event.arguments || {}),
+      JSON.stringify(event.result || null),
+      event.text || null,
+      event.status,
+      event.durationMs || null
+    )
+    return result.lastInsertRowid
+  },
+
+  getToolEventsByThread: (threadId) => {
+    const stmt = db.prepare('SELECT * FROM tool_events WHERE thread_id = ? ORDER BY COALESCE(message_id, 0), sequence_index ASC, id ASC')
+    return stmt.all(threadId).map(row => ({
+      ...row,
+      arguments: row.arguments_json ? JSON.parse(row.arguments_json) : {},
+      result: row.result_json ? JSON.parse(row.result_json) : null
+    }))
+  },
+
+  assignPendingToolEventsToMessage: (threadId, messageId) => {
+    const stmt = db.prepare('UPDATE tool_events SET message_id = ? WHERE thread_id = ? AND message_id IS NULL')
+    stmt.run(messageId, threadId)
   },
 
   // Provider operations
